@@ -1469,7 +1469,7 @@
     });
   }
 
-  function consoleCard(identifier, wasAtBottom) {
+  function consoleCard(identifier) {
     return makeCard("panel-console", "Console tail", (body) => {
       const consoleEl = document.createElement("div");
       consoleEl.className = "console";
@@ -1481,10 +1481,7 @@
         consoleEl.appendChild(div);
       });
       body.appendChild(consoleEl);
-      // Only auto-follow the tail if the reader was already at (or near) the bottom —
-      // otherwise a rebuild while they've scrolled up to read history would yank them
-      // back down every render.
-      if (wasAtBottom !== false) consoleEl.scrollTop = consoleEl.scrollHeight;
+      consoleEl.scrollTop = consoleEl.scrollHeight;
       return "";
     });
   }
@@ -1497,11 +1494,6 @@
     const cpuLimit = (d.limits && d.limits.cpu) || 0;
     const memLimitBytes = (d.limits && d.limits.memory ? d.limits.memory * 1024 * 1024 : 0);
     const diskLimitBytes = (d.limits && d.limits.disk ? d.limits.disk * 1024 * 1024 : 0);
-
-    const oldConsoleEl = mainEl.querySelector(".console");
-    const consoleWasAtBottom = oldConsoleEl
-      ? (oldConsoleEl.scrollHeight - oldConsoleEl.scrollTop - oldConsoleEl.clientHeight) < 40
-      : true;
 
     pendingCanvasDraws = [];
     mainEl.innerHTML = "";
@@ -1564,7 +1556,7 @@
       ["chart-history", chartCard(rt, cpuLimit, memLimitBytes)],
       ["chart-tps", tpsCard(rt)],
       ["panel-squaremap", squaremapCard()],
-      ["panel-console", consoleCard(identifier, consoleWasAtBottom)],
+      ["panel-console", consoleCard(identifier)],
       ["panel-players", playersCard(rt)],
       ["panel-alerts", alertsCard(rt)],
       ["panel-plan", planCard()],
