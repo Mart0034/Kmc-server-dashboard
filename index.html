@@ -837,6 +837,9 @@
       let stats;
       try { stats = JSON.parse(args[0]); } catch (e) { return; }
       applyStats(identifier, rt, stats);
+    } else if (event === "status") {
+      if (rt.resources) rt.resources.state = args[0];
+      renderIfActive(identifier);
     } else if (event === "console output") {
       const line = stripAnsi(String(args[0] || ""));
       appendConsoleLine(identifier, line);
@@ -867,29 +870,32 @@
   }
 
   function applyStats(identifier, rt, stats) {
-    const r = stats.resources || {};
+    // Live shape (confirmed against the actual wings stream, which differs from the
+    // REST /resources endpoint): { cpu_absolute, disk_bytes, memory_bytes,
+    // memory_limit_bytes, network: { rx_bytes, tx_bytes }, state, uptime } — flat,
+    // no "resources" wrapper, "state" not "current_state", nested network object.
+    const net = stats.network || {};
     const now = Date.now();
     let netRxRate = null, netTxRate = null;
-    if (rt.prevNet && r.network_rx_bytes != null) {
+    if (rt.prevNet && net.rx_bytes != null) {
       const dt = (now - rt.prevNet.t) / 1000;
       if (dt > 0) {
-        netRxRate = Math.max(0, (r.network_rx_bytes - rt.prevNet.rx) / dt);
-        netTxRate = Math.max(0, (r.network_tx_bytes - rt.prevNet.tx) / dt);
+        netRxRate = Math.max(0, (net.rx_bytes - rt.prevNet.rx) / dt);
+        netTxRate = Math.max(0, (net.tx_bytes - rt.prevNet.tx) / dt);
       }
     }
-    rt.prevNet = { t: now, rx: r.network_rx_bytes || 0, tx: r.network_tx_bytes || 0 };
+    rt.prevNet = { t: now, rx: net.rx_bytes || 0, tx: net.tx_bytes || 0 };
     rt.resources = {
-      state: stats.current_state,
-      isSuspended: !!stats.is_suspended,
-      cpu: r.cpu_absolute || 0,
-      memUsed: r.memory_bytes || 0,
-      diskUsed: r.disk_bytes || 0,
-      uptime: r.uptime || 0,
+      state: stats.state,
+      cpu: stats.cpu_absolute || 0,
+      memUsed: stats.memory_bytes || 0,
+      diskUsed: stats.disk_bytes || 0,
+      uptime: stats.uptime || 0,
       netRx: netRxRate, netTx: netTxRate
     };
     pushHistory(rt, {
-      t: now, cpu: r.cpu_absolute || 0, mem: r.memory_bytes || 0,
-      disk: r.disk_bytes || 0, netRx: netRxRate, netTx: netTxRate
+      t: now, cpu: stats.cpu_absolute || 0, mem: stats.memory_bytes || 0,
+      disk: stats.disk_bytes || 0, netRx: netRxRate, netTx: netTxRate
     });
     renderIfActive(identifier);
   }
@@ -1002,8 +1008,8 @@
 
   function statusDotClass(rt) {
     if (!rt.connected) return "muted";
+    if (rt.details && rt.details.is_suspended) return "critical";
     if (!rt.resources) return "muted";
-    if (rt.resources.isSuspended) return "critical";
     const st = rt.resources.state;
     if (st === "running") return "good";
     if (st === "starting" || st === "stopping") return "warning";
@@ -1011,8 +1017,8 @@
   }
   function statusLabel(rt) {
     if (!rt.connected) return "Connecting…";
+    if (rt.details && rt.details.is_suspended) return "Suspended";
     if (!rt.resources) return "Loading…";
-    if (rt.resources.isSuspended) return "Suspended";
     const st = rt.resources.state;
     if (st === "running") return "Online";
     if (st === "starting") return "Starting…";
