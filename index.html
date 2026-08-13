@@ -542,6 +542,12 @@
     return res.json();
   }
 
+  function buildSocketUrl(rawSocket, viaProxy) {
+    if (!viaProxy) return rawSocket;
+    const proxyBase = config.panelUrl.replace(/^http/, "ws").replace(/\/+$/, "");
+    return `${proxyBase}/wsproxy?target=${encodeURIComponent(rawSocket)}`;
+  }
+
   async function planFetch(path) {
     const url = config.planUrl.replace(/\/+$/, "") + path;
     const headers = {};
@@ -769,7 +775,8 @@
     try {
       const tokenData = await ptFetch(`/api/client/servers/${identifier}/websocket`);
       const { token, socket } = tokenData.data;
-      const ws = new WebSocket(socket);
+      const viaProxy = !!rt.wsViaProxy;
+      const ws = new WebSocket(buildSocketUrl(socket, viaProxy));
       rt.ws = ws;
       ws.addEventListener("open", () => {
         rt.wsOpened = true;
@@ -782,9 +789,18 @@
           code: ev.code,
           reason: ev.reason || "(browser gave no reason — common for connection-level rejections)",
           phase: rt.wsOpened ? (rt.wsAuthed ? "streaming" : "opened, no auth reply") : "never opened",
+          viaProxy,
           t: Date.now()
         };
-        if (rt.ws === ws) scheduleReconnect(identifier);
+        if (rt.ws === ws) {
+          if (!rt.wsOpened && !viaProxy) {
+            // Direct connection to the node never opened — route the next attempt
+            // through the worker's WebSocket tunnel instead.
+            rt.wsViaProxy = true;
+            rt.wsRetryDelay = 500;
+          }
+          scheduleReconnect(identifier);
+        }
         renderIfActive(identifier);
       });
       ws.addEventListener("error", () => { try { ws.close(); } catch (e) {} });
@@ -1185,9 +1201,9 @@
     if (!rt.connected) {
       const banner = document.createElement("div");
       banner.className = "status-banner warning";
-      let text = "Reconnecting to console/stats socket…";
+      let text = "Reconnecting to console/stats socket" + (rt.wsViaProxy ? " via proxy tunnel" : "") + "…";
       if (rt.lastClose) {
-        text += ` (last attempt: ${rt.lastClose.phase}, close code ${rt.lastClose.code} — ${rt.lastClose.reason})`;
+        text += ` (last attempt${rt.lastClose.viaProxy ? " [proxy]" : " [direct]"}: ${rt.lastClose.phase}, close code ${rt.lastClose.code} — ${rt.lastClose.reason})`;
       }
       banner.textContent = text;
       mainEl.appendChild(banner);
