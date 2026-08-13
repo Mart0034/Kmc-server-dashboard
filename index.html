@@ -764,17 +764,26 @@
     const rt = getRuntime(identifier);
     if (rt.ws) { try { rt.ws.close(); } catch (e) {} rt.ws = null; }
     clearTimeout(rt.wsRetryTimer);
+    rt.wsOpened = false;
+    rt.wsAuthed = false;
     try {
       const tokenData = await ptFetch(`/api/client/servers/${identifier}/websocket`);
       const { token, socket } = tokenData.data;
       const ws = new WebSocket(socket);
       rt.ws = ws;
       ws.addEventListener("open", () => {
+        rt.wsOpened = true;
         ws.send(JSON.stringify({ event: "auth", args: [token] }));
       });
       ws.addEventListener("message", (ev) => handleWsMessage(identifier, rt, ev));
-      ws.addEventListener("close", () => {
+      ws.addEventListener("close", (ev) => {
         rt.connected = false;
+        rt.lastClose = {
+          code: ev.code,
+          reason: ev.reason || "(browser gave no reason — common for connection-level rejections)",
+          phase: rt.wsOpened ? (rt.wsAuthed ? "streaming" : "opened, no auth reply") : "never opened",
+          t: Date.now()
+        };
         if (rt.ws === ws) scheduleReconnect(identifier);
         renderIfActive(identifier);
       });
@@ -806,6 +815,7 @@
     const event = msg.event, args = msg.args || [];
     if (event === "auth success") {
       rt.connected = true;
+      rt.wsAuthed = true;
       renderIfActive(identifier);
     } else if (event === "stats") {
       let stats;
@@ -1175,7 +1185,11 @@
     if (!rt.connected) {
       const banner = document.createElement("div");
       banner.className = "status-banner warning";
-      banner.textContent = "Reconnecting to console/stats socket…";
+      let text = "Reconnecting to console/stats socket…";
+      if (rt.lastClose) {
+        text += ` (last attempt: ${rt.lastClose.phase}, close code ${rt.lastClose.code} — ${rt.lastClose.reason})`;
+      }
+      banner.textContent = text;
       mainEl.appendChild(banner);
     }
 
