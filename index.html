@@ -1,0 +1,1364 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Server Dashboard</title>
+<style>
+  :root {
+    color-scheme: light;
+    --surface-0:      #f9f9f7;
+    --surface-1:      #fcfcfb;
+    --surface-2:      #f2f1ed;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --grid:           #e1e0d9;
+    --baseline:       #c3c2b7;
+    --border:         rgba(11,11,11,0.10);
+
+    --slot-1: #2a78d6; /* blue    - CPU */
+    --slot-2: #eb6834; /* orange  - Memory */
+    --slot-3: #1baf7a; /* aqua    - Disk */
+    --slot-4: #eda100; /* yellow  - Network down */
+    --slot-7: #4a3aa7; /* violet  - Network up */
+
+    --status-good:     #0ca30c;
+    --status-warning:  #fab219;
+    --status-serious:  #ec835a;
+    --status-critical: #d03b3b;
+    --status-muted:    #898781;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --surface-0:      #0d0d0d;
+      --surface-1:      #1a1a19;
+      --surface-2:      #232322;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #898781;
+      --grid:           #2c2c2a;
+      --baseline:       #383835;
+      --border:         rgba(255,255,255,0.10);
+
+      --slot-1: #3987e5;
+      --slot-2: #d95926;
+      --slot-3: #199e70;
+      --slot-4: #c98500;
+      --slot-7: #9085e9;
+
+      --status-good:     #0ca30c;
+      --status-warning:  #fab219;
+      --status-serious:  #ec835a;
+      --status-critical: #e66767;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --surface-0:      #0d0d0d;
+    --surface-1:      #1a1a19;
+    --surface-2:      #232322;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted:     #898781;
+    --grid:           #2c2c2a;
+    --baseline:       #383835;
+    --border:         rgba(255,255,255,0.10);
+
+    --slot-1: #3987e5;
+    --slot-2: #d95926;
+    --slot-3: #199e70;
+    --slot-4: #c98500;
+    --slot-7: #9085e9;
+
+    --status-good:     #0ca30c;
+    --status-warning:  #fab219;
+    --status-serious:  #ec835a;
+    --status-critical: #e66767;
+  }
+
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: var(--surface-0);
+    color: var(--text-primary);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body { overflow-x: hidden; }
+  button { font-family: inherit; }
+
+  .app { display: flex; flex-direction: column; min-height: 100vh; }
+
+  /* ---------- header ---------- */
+  header {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px;
+    background: var(--surface-1);
+    background: color-mix(in srgb, var(--surface-1) 88%, transparent);
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 20;
+  }
+  header h1 { font-size: 16px; margin: 0; font-weight: 700; white-space: nowrap; letter-spacing: -.01em; }
+  .tabs { display: flex; gap: 6px; overflow-x: auto; flex: 1; scrollbar-width: thin; }
+  .tab {
+    flex: none; padding: 7px 12px; border-radius: 9px; border: 1px solid transparent;
+    background: transparent; color: var(--text-secondary); font-size: 13px; font-weight: 600;
+    cursor: pointer; display: flex; align-items: center; gap: 6px; white-space: nowrap;
+    transition: background .12s, color .12s;
+  }
+  .tab:hover { background: var(--surface-2); }
+  .tab.active { background: var(--surface-2); color: var(--text-primary); border-color: var(--border); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .dot.good { background: var(--status-good); }
+  .dot.warning { background: var(--status-warning); }
+  .dot.critical { background: var(--status-critical); }
+  .dot.muted { background: var(--status-muted); }
+
+  .icon-btn {
+    flex: none; width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--surface-1); color: var(--text-secondary); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background .12s, color .12s, border-color .12s;
+  }
+  .icon-btn:hover { background: var(--surface-2); color: var(--text-primary); }
+  .icon-btn svg { width: 18px; height: 18px; }
+
+  /* ---------- layout ---------- */
+  main { flex: 1; padding: 12px; display: flex; flex-direction: column; gap: 10px; max-width: 1100px; width: 100%; margin: 0 auto; }
+  .empty-state {
+    margin: auto; text-align: center; max-width: 420px; color: var(--text-secondary); padding: 24px;
+  }
+  .empty-state h2 { color: var(--text-primary); font-size: 18px; }
+  .btn {
+    padding: 9px 16px; border-radius: 9px; border: 1px solid var(--border);
+    background: var(--slot-1); color: white; font-weight: 600; font-size: 14px; cursor: pointer;
+    transition: filter .12s;
+  }
+  .btn:hover { filter: brightness(1.08); }
+  .btn.secondary { background: var(--surface-2); color: var(--text-primary); }
+  .btn.danger { background: var(--status-critical); color: white; }
+  .btn:disabled { opacity: .5; cursor: default; }
+
+  .status-banner {
+    display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 10px;
+    background: var(--surface-2); font-size: 13px; color: var(--text-secondary);
+  }
+  .status-banner.warning { color: var(--status-warning); }
+  .status-banner.critical { color: var(--status-critical); }
+
+  .server-header {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px;
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 16px; padding: 14px 18px;
+    box-shadow: 0 1px 2px rgba(11,11,11,.04);
+  }
+  .server-header .name { font-size: 18px; font-weight: 700; letter-spacing: -.01em; }
+  .server-header .state-label { font-size: 13px; font-weight: 600; }
+  .server-header .meta { font-size: 12px; color: var(--text-muted); }
+
+  /* ---------- widget card system ---------- */
+  .card {
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 16px;
+    box-shadow: 0 1px 2px rgba(11,11,11,.04);
+    overflow: hidden;
+  }
+  .card-header {
+    display: flex; align-items: center; gap: 10px; width: 100%;
+    padding: 12px 14px; border: none; background: none; cursor: pointer; text-align: left;
+    font: inherit; color: inherit; border-radius: 0;
+  }
+  .card-header:hover { background: var(--surface-2); }
+  .card-title {
+    font-size: 12px; font-weight: 700; color: var(--text-secondary);
+    text-transform: uppercase; letter-spacing: .03em; flex: none;
+  }
+  .card-summary { font-size: 13px; font-weight: 600; color: var(--text-primary); flex: 1; text-align: right; }
+  .chevron-btn { flex: none; width: 18px; height: 18px; color: var(--text-muted); transition: transform .18s ease; display: flex; }
+  .card.compact .chevron-btn { transform: rotate(-90deg); }
+  .card-body-wrap { display: grid; grid-template-rows: 1fr; transition: grid-template-rows .18s ease; }
+  .card.compact .card-body-wrap { grid-template-rows: 0fr; }
+  .card-body-inner { overflow: hidden; }
+  .card-body { padding: 0 14px 14px; }
+
+  .tile-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px;
+  }
+  .card.tile-card .card-header { padding: 10px 12px 6px; }
+  .card.tile-card .card-title { font-size: 11px; }
+  .card.tile-card .card-summary { font-size: 19px; font-weight: 700; text-align: left; }
+  .card.tile-card .card-body { padding: 0 12px 12px; }
+  .tile-subtext { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+  .meter-track {
+    height: 6px; border-radius: 4px; background: var(--surface-2); overflow: hidden; margin-top: 8px;
+  }
+  .meter-fill { height: 100%; border-radius: 4px; transition: width .2s ease; }
+  .card.tile-card canvas.spark { width: 100%; height: 30px; display: block; margin-top: 6px; }
+  .card.tile-card canvas.spark.spark-lg { height: 54px; }
+  .tile-stats { display: flex; gap: 12px; font-size: 11px; color: var(--text-muted); margin-top: 6px; font-variant-numeric: tabular-nums; }
+
+  .legend-row { display: flex; gap: 14px; margin-bottom: 6px; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); }
+  .legend-swatch { width: 10px; height: 10px; border-radius: 2px; }
+  .chart-wrap { position: relative; }
+  canvas.history { width: 100%; height: 160px; display: block; }
+  .chart-tooltip {
+    position: absolute; pointer-events: none; background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 6px 8px; font-size: 12px; color: var(--text-primary); white-space: nowrap;
+    display: none; transform: translate(-50%, -110%);
+  }
+
+  .two-col { display: grid; grid-template-columns: 1fr; gap: 10px; }
+  @media (min-width: 760px) { .two-col { grid-template-columns: 1fr 1fr; } }
+
+  .players-list { display: flex; flex-wrap: wrap; gap: 6px; min-height: 24px; }
+  .player-chip {
+    display: flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px;
+    background: var(--surface-2); font-size: 12px; font-weight: 600;
+  }
+  .empty-hint { font-size: 12px; color: var(--text-muted); }
+
+  .alerts-list { display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow-y: auto; }
+  .alert-row { display: flex; align-items: flex-start; gap: 8px; font-size: 12px; }
+  .alert-row .time { color: var(--text-muted); flex: none; font-variant-numeric: tabular-nums; }
+  .alert-row .badge {
+    flex: none; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 4px; text-transform: uppercase;
+  }
+  .badge.serious { background: color-mix(in srgb, var(--status-serious) 20%, transparent); color: var(--status-serious); }
+  .badge.critical { background: color-mix(in srgb, var(--status-critical) 20%, transparent); color: var(--status-critical); }
+  .badge.warning { background: color-mix(in srgb, var(--status-warning) 25%, transparent); color: var(--status-warning); }
+  .alert-row .msg { color: var(--text-secondary); word-break: break-word; }
+
+  .console {
+    background: var(--surface-0); border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px;
+    height: 220px; overflow-y: auto; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 11.5px;
+    color: var(--text-secondary); line-height: 1.5;
+  }
+  .console .line { white-space: pre-wrap; word-break: break-word; }
+  .console .line.hit { color: var(--status-serious); }
+  .console .line.crit { color: var(--status-critical); font-weight: 600; }
+
+  .power-buttons { display: flex; gap: 6px; flex-wrap: wrap; }
+  .power-buttons button {
+    padding: 8px 14px; font-size: 12px; font-weight: 700; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--surface-2); color: var(--text-primary); cursor: pointer; transition: filter .12s;
+  }
+  .power-buttons button:hover { filter: brightness(1.06); }
+
+  /* ---------- modals ---------- */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,.5); display: none;
+    align-items: center; justify-content: center; z-index: 100; padding: 16px;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--surface-1); border-radius: 16px; width: 100%; max-width: 480px;
+    max-height: 90vh; overflow-y: auto; padding: 18px 20px; border: 1px solid var(--border);
+  }
+  .modal h2 { font-size: 16px; margin: 0 0 4px; }
+  .modal .sub { font-size: 12px; color: var(--text-muted); margin: 0 0 16px; }
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 5px; }
+  .field input {
+    width: 100%; padding: 9px 10px; border-radius: 9px; border: 1px solid var(--border);
+    background: var(--surface-0); color: var(--text-primary); font-size: 14px;
+  }
+  .field .hint { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+  .modal-actions { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+  .server-pick-list { display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow-y: auto; margin-top: 8px; }
+  .server-pick-row { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 6px 8px; border-radius: 8px; background: var(--surface-2); }
+  .server-pick-row input { width: auto; }
+  .configured-list { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+  .configured-row { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 6px 8px; border-radius: 8px; background: var(--surface-2); }
+  .configured-row .name { flex: 1; }
+  .configured-row button { background: none; border: none; color: var(--status-critical); cursor: pointer; font-size: 12px; font-weight: 700; }
+
+  .footer-note { text-align: center; font-size: 11px; color: var(--text-muted); padding: 6px 0 2px; }
+
+  /* ---------- customize drawer ---------- */
+  .widget-group { margin-bottom: 16px; }
+  .widget-group-title { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); font-weight: 700; margin: 0 0 4px; }
+  .widget-row { display: flex; align-items: center; justify-content: space-between; padding: 9px 2px; border-bottom: 1px solid var(--border); }
+  .widget-row:last-child { border-bottom: none; }
+  .widget-row .wname { font-size: 13px; font-weight: 600; }
+  .switch { position: relative; display: inline-block; width: 40px; height: 23px; flex: none; }
+  .switch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+  .switch .track { position: absolute; inset: 0; background: var(--surface-2); border: 1px solid var(--border); border-radius: 999px; transition: background .15s, border-color .15s; pointer-events: none; }
+  .switch .thumb { position: absolute; top: 2px; left: 2px; width: 17px; height: 17px; border-radius: 50%; background: var(--text-muted); transition: transform .15s, background .15s; }
+  .switch input:checked ~ .track { background: var(--slot-1); border-color: var(--slot-1); }
+  .switch input:checked ~ .track .thumb { transform: translateX(17px); background: #fff; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Server Dashboard</h1>
+    <div class="tabs" id="tabs"></div>
+    <button class="icon-btn" id="customizeBtn" title="Customize widgets"></button>
+    <button class="icon-btn" id="themeToggle" title="Toggle theme"></button>
+    <button class="icon-btn" id="settingsBtn" title="Settings"></button>
+  </header>
+
+  <main id="main">
+    <div class="empty-state" id="emptyState">
+      <h2>No server configured yet</h2>
+      <p>Add your Pterodactyl panel URL, API key, and pick which server(s) to watch.</p>
+      <button class="btn" id="openSettingsEmpty">Open settings</button>
+    </div>
+  </main>
+</div>
+
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <h2>Panel connection</h2>
+    <p class="sub">Uses the Pterodactyl <strong>Client API</strong>. Create a key under your account's API Credentials page. Everything below is stored only in this browser's local storage &mdash; never sent anywhere but your panel (and, if you set it up, your Plan analytics server).</p>
+
+    <div class="field">
+      <label for="panelUrl">Panel URL</label>
+      <input id="panelUrl" placeholder="https://panel.example.com" autocomplete="off" autocapitalize="off" spellcheck="false">
+    </div>
+    <div class="field">
+      <label for="apiKey">Client API key</label>
+      <input id="apiKey" placeholder="ptlc_xxxxxxxxxxxxxxxxxxxx" autocomplete="off" autocapitalize="off" spellcheck="false" type="password">
+      <div class="hint">Account &rarr; API Credentials &rarr; Create. Read-only console/stats access is enough unless you want the power buttons.</div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn secondary" id="discoverBtn">Fetch my servers</button>
+      <button class="btn secondary" id="testBtn">Test connection</button>
+    </div>
+    <div id="connMsg" class="hint"></div>
+
+    <div id="discoverResults" class="server-pick-list"></div>
+
+    <div class="field" style="margin-top:18px;">
+      <label>Add server by identifier</label>
+      <div style="display:flex; gap:6px;">
+        <input id="manualId" placeholder="e.g. a1b2c3d4" style="flex:1">
+        <input id="manualLabel" placeholder="Label e.g. Main server" style="flex:1">
+      </div>
+      <button class="btn secondary" id="manualAddBtn" style="margin-top:6px;">Add</button>
+      <div class="hint">Use this if you already know the identifier — skips the discovery call.</div>
+    </div>
+
+    <div class="field">
+      <label>Configured servers</label>
+      <div id="configuredList" class="configured-list"></div>
+      <div class="empty-hint" id="noConfigured">None yet.</div>
+    </div>
+
+    <div class="field" style="margin-top:18px;">
+      <label for="planUrl">Player analytics (Plan) URL &mdash; optional</label>
+      <input id="planUrl" placeholder="http://your-plan-host:8804" autocomplete="off" autocapitalize="off" spellcheck="false">
+      <div class="hint">Plan's own web server address (not the Pterodactyl panel). Its /v1/ JSON endpoints look like they reuse Plan's normal login session rather than a documented API key — try logging into Plan itself in this browser first if the widget shows a login page instead of data.</div>
+    </div>
+    <div class="field">
+      <label for="planServerId">Plan server ID &mdash; optional</label>
+      <input id="planServerId" placeholder="Plan's own server UUID or name, if it asks for one" autocomplete="off" autocapitalize="off" spellcheck="false">
+    </div>
+    <div class="field">
+      <label for="planApiKey">Plan API key &mdash; optional</label>
+      <input id="planApiKey" placeholder="Bearer token, if you have one" autocomplete="off" autocapitalize="off" spellcheck="false" type="password">
+      <div class="hint">Powers the Player analytics widget, which currently shows the raw response so we can see exactly what comes back and fix the mapping together.</div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn" id="saveBtn">Save &amp; close</button>
+      <button class="btn secondary" id="closeBtn">Cancel</button>
+    </div>
+    <div class="footer-note">CORS note: if requests are blocked, your panel admin needs to allow this page's origin in its CORS settings (config/cors.php or ALLOWED_ORIGINS). Serving this file over http(s):// from your own network works better than opening it directly as a file:// page.</div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="customizeOverlay">
+  <div class="modal">
+    <h2>Customize dashboard</h2>
+    <p class="sub">Turn widgets on or off. Use the arrow on each widget's header to expand or compact it &mdash; that's saved automatically too.</p>
+    <div id="customizeList"></div>
+    <div class="modal-actions">
+      <button class="btn" id="customizeDoneBtn">Done</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ============================== icons ============================== */
+  const GEAR_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>';
+  const SLIDERS_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="14" y2="6"/><circle cx="17" cy="6" r="2"/><line x1="10" y1="12" x2="20" y2="12"/><circle cx="7" cy="12" r="2"/><line x1="4" y1="18" x2="14" y2="18"/><circle cx="17" cy="18" r="2"/></svg>';
+  const SUN_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>';
+  const CHEVRON_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
+  document.getElementById("settingsBtn").innerHTML = GEAR_SVG;
+  document.getElementById("customizeBtn").innerHTML = SLIDERS_SVG;
+  document.getElementById("themeToggle").innerHTML = SUN_SVG;
+
+  /* ============================== state / storage ============================== */
+  const STORAGE_KEY = "kmc-dashboard-config-v1";
+  const CONFIG_DEFAULTS = { panelUrl: "", apiKey: "", servers: [], activeId: null, widgets: {}, planUrl: "", planApiKey: "", planServerId: "" };
+  function loadConfig() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return Object.assign({}, CONFIG_DEFAULTS);
+      const parsed = JSON.parse(raw);
+      return Object.assign({}, CONFIG_DEFAULTS, parsed, { widgets: Object.assign({}, parsed.widgets) });
+    } catch (e) { return Object.assign({}, CONFIG_DEFAULTS); }
+  }
+  function saveConfig(cfg) { localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg)); }
+
+  let config = loadConfig();
+
+  const THEME_KEY = "kmc-dashboard-theme";
+  function applyTheme(t) {
+    if (t === "dark" || t === "light") document.documentElement.setAttribute("data-theme", t);
+    else document.documentElement.removeAttribute("data-theme");
+  }
+  applyTheme(localStorage.getItem(THEME_KEY) || "");
+  document.getElementById("themeToggle").addEventListener("click", () => {
+    const cur = localStorage.getItem(THEME_KEY) || "";
+    const next = cur === "dark" ? "light" : cur === "light" ? "" : "dark";
+    localStorage.setItem(THEME_KEY, next);
+    applyTheme(next);
+  });
+
+  /* ============================== widgets ============================== */
+  const WIDGET_DEFS = [
+    { id: "power",         label: "Power controls",             group: "Controls",       defaultEnabled: true, defaultExpanded: true },
+    { id: "tile-cpu",      label: "CPU",                         group: "Resource tiles", defaultEnabled: true, defaultExpanded: true },
+    { id: "tile-memory",   label: "Memory",                      group: "Resource tiles", defaultEnabled: true, defaultExpanded: true },
+    { id: "tile-disk",     label: "Disk",                        group: "Resource tiles", defaultEnabled: true, defaultExpanded: true },
+    { id: "tile-net-in",   label: "Network in",                  group: "Resource tiles", defaultEnabled: true, defaultExpanded: true },
+    { id: "tile-net-out",  label: "Network out",                 group: "Resource tiles", defaultEnabled: true, defaultExpanded: true },
+    { id: "chart-history", label: "CPU & memory chart",          group: "Charts",         defaultEnabled: true, defaultExpanded: true },
+    { id: "panel-players", label: "Players online",              group: "Panels",         defaultEnabled: true, defaultExpanded: true },
+    { id: "panel-alerts",  label: "Alerts",                      group: "Panels",         defaultEnabled: true, defaultExpanded: true },
+    { id: "panel-plan",    label: "Player analytics (Plan)",     group: "Panels",         defaultEnabled: true, defaultExpanded: true },
+    { id: "panel-console", label: "Console tail",                group: "Panels",         defaultEnabled: true, defaultExpanded: true }
+  ];
+
+  function getWidgetState(id) {
+    const def = WIDGET_DEFS.find((w) => w.id === id) || { defaultEnabled: true, defaultExpanded: true };
+    const saved = config.widgets[id] || {};
+    return {
+      enabled: saved.enabled != null ? saved.enabled : def.defaultEnabled,
+      expanded: saved.expanded != null ? saved.expanded : def.defaultExpanded
+    };
+  }
+  function setWidgetState(id, patch) {
+    config.widgets[id] = Object.assign({}, getWidgetState(id), patch);
+    saveConfig(config);
+    scheduleRender();
+  }
+
+  function makeCard(id, title, bodyRenderFn, opts) {
+    opts = opts || {};
+    const st = getWidgetState(id);
+    if (!st.enabled) return null;
+    const card = document.createElement("div");
+    card.className = "card" + (opts.tile ? " tile-card" : "") + (st.expanded ? "" : " compact");
+
+    const header = document.createElement("button");
+    header.type = "button";
+    header.className = "card-header";
+    header.addEventListener("click", () => setWidgetState(id, { expanded: !getWidgetState(id).expanded }));
+
+    const titleEl = document.createElement("span");
+    titleEl.className = "card-title";
+    titleEl.textContent = title;
+    const summaryEl = document.createElement("span");
+    summaryEl.className = "card-summary";
+    const chevron = document.createElement("span");
+    chevron.className = "chevron-btn";
+    chevron.innerHTML = CHEVRON_SVG;
+    header.appendChild(titleEl);
+    header.appendChild(summaryEl);
+    header.appendChild(chevron);
+    card.appendChild(header);
+
+    const bodyWrap = document.createElement("div");
+    bodyWrap.className = "card-body-wrap";
+    const bodyInner = document.createElement("div");
+    bodyInner.className = "card-body-inner";
+    const body = document.createElement("div");
+    body.className = "card-body";
+    bodyInner.appendChild(body);
+    bodyWrap.appendChild(bodyInner);
+    card.appendChild(bodyWrap);
+
+    const summary = bodyRenderFn(body, st.expanded);
+    if (summary) summaryEl.textContent = summary;
+    return card;
+  }
+
+  /* ============================== helpers ============================== */
+  function fmtBytes(b) {
+    if (b == null || isNaN(b)) return "—";
+    if (b === 0) return "0 B";
+    const units = ["B", "KB", "MB", "GB", "TB"];
+    const i = Math.min(units.length - 1, Math.floor(Math.log(Math.abs(b)) / Math.log(1024)));
+    return (b / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 1) + " " + units[i];
+  }
+  function fmtRate(bytesPerSec) {
+    if (bytesPerSec == null || isNaN(bytesPerSec)) return "—";
+    return fmtBytes(bytesPerSec) + "/s";
+  }
+  function fmtUptime(ms) {
+    if (!ms || ms <= 0) return "0m";
+    let s = Math.floor(ms / 1000);
+    const d = Math.floor(s / 86400); s -= d * 86400;
+    const h = Math.floor(s / 3600); s -= h * 3600;
+    const m = Math.floor(s / 60);
+    if (d > 0) return `${d}d ${h}h`;
+    if (h > 0) return `${h}h ${m}m`;
+    return `${m}m`;
+  }
+  function fmtTime(ts) {
+    const d = new Date(ts);
+    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  }
+  function stripAnsi(s) { return s.replace(/\x1b\[[0-9;]*m/g, ""); }
+  function escapeHtml(s) {
+    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  async function ptFetch(path, opts) {
+    opts = opts || {};
+    const url = config.panelUrl.replace(/\/+$/, "") + path;
+    const res = await fetch(url, Object.assign({
+      headers: Object.assign({
+        "Authorization": "Bearer " + config.apiKey,
+        "Accept": "Application/vnd.pterodactyl.v1+json",
+        "Content-Type": "application/json"
+      }, (opts.headers || {}))
+    }, opts));
+    if (!res.ok) {
+      let detail = "";
+      try { const j = await res.json(); detail = (j.errors && j.errors[0] && j.errors[0].detail) || ""; } catch (e) {}
+      throw new Error(`HTTP ${res.status}${detail ? " — " + detail : ""}`);
+    }
+    if (res.status === 204) return null;
+    return res.json();
+  }
+
+  async function planFetch(path) {
+    const url = config.planUrl.replace(/\/+$/, "") + path;
+    const headers = {};
+    // Plan's /v1/ JSON endpoints appear to reuse the same login session as its web
+    // dashboard (cookie-based) rather than a documented bearer-token API — so we send
+    // both: the configured key as a Bearer header (in case a proxy/custom setup checks
+    // it) and same-site credentials (in case a Plan login cookie is already present).
+    if (config.planApiKey) headers["Authorization"] = "Bearer " + config.planApiKey;
+    const res = await fetch(url, { headers, credentials: "include" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const ct = res.headers.get("content-type") || "";
+    if (!ct.includes("json")) throw new Error("Got non-JSON response (likely a login page) — you may need to log into Plan in this browser first");
+    return res.json();
+  }
+
+  /* ============================== settings modal ============================== */
+  const modalOverlay = document.getElementById("modalOverlay");
+  const panelUrlInput = document.getElementById("panelUrl");
+  const apiKeyInput = document.getElementById("apiKey");
+  const planUrlInput = document.getElementById("planUrl");
+  const planServerIdInput = document.getElementById("planServerId");
+  const planApiKeyInput = document.getElementById("planApiKey");
+  const connMsg = document.getElementById("connMsg");
+  const discoverResults = document.getElementById("discoverResults");
+  const configuredList = document.getElementById("configuredList");
+  const noConfigured = document.getElementById("noConfigured");
+
+  function openModal() {
+    panelUrlInput.value = config.panelUrl || "";
+    apiKeyInput.value = config.apiKey || "";
+    planUrlInput.value = config.planUrl || "";
+    planServerIdInput.value = config.planServerId || "";
+    planApiKeyInput.value = config.planApiKey || "";
+    connMsg.textContent = "";
+    discoverResults.innerHTML = "";
+    renderConfiguredList();
+    modalOverlay.classList.add("open");
+  }
+  function closeModal() { modalOverlay.classList.remove("open"); }
+  document.getElementById("settingsBtn").addEventListener("click", openModal);
+  document.getElementById("openSettingsEmpty").addEventListener("click", openModal);
+  document.getElementById("closeBtn").addEventListener("click", closeModal);
+  modalOverlay.addEventListener("click", (e) => { if (e.target === modalOverlay) closeModal(); });
+
+  function renderConfiguredList() {
+    configuredList.innerHTML = "";
+    noConfigured.style.display = config.servers.length ? "none" : "block";
+    config.servers.forEach((s) => {
+      const row = document.createElement("div");
+      row.className = "configured-row";
+      row.innerHTML = `<span class="name">${escapeHtml(s.label)}</span><span class="hint" style="color:var(--text-muted)">${escapeHtml(s.identifier)}</span>`;
+      const rm = document.createElement("button");
+      rm.textContent = "Remove";
+      rm.addEventListener("click", () => {
+        config.servers = config.servers.filter((x) => x.identifier !== s.identifier);
+        renderConfiguredList();
+      });
+      row.appendChild(rm);
+      configuredList.appendChild(row);
+    });
+  }
+
+  document.getElementById("manualAddBtn").addEventListener("click", () => {
+    const manualId = document.getElementById("manualId");
+    const manualLabel = document.getElementById("manualLabel");
+    const id = manualId.value.trim();
+    const label = manualLabel.value.trim() || id;
+    if (!id) return;
+    if (!config.servers.some((s) => s.identifier === id)) {
+      config.servers.push({ identifier: id, label });
+      renderConfiguredList();
+    }
+    manualId.value = "";
+    manualLabel.value = "";
+  });
+
+  function normalizeOrigin(raw) {
+    const trimmed = (raw || "").trim();
+    if (!trimmed) return "";
+    try { return new URL(trimmed).origin; }
+    catch (e) {
+      try { return new URL("https://" + trimmed).origin; }
+      catch (e2) { return trimmed.replace(/\/+$/, ""); }
+    }
+  }
+
+  function currentDraftConn() {
+    return { panelUrl: normalizeOrigin(panelUrlInput.value), apiKey: apiKeyInput.value.trim() };
+  }
+
+  panelUrlInput.addEventListener("blur", () => {
+    if (panelUrlInput.value.trim()) panelUrlInput.value = normalizeOrigin(panelUrlInput.value);
+  });
+
+  document.getElementById("testBtn").addEventListener("click", async () => {
+    const draft = currentDraftConn();
+    if (!draft.panelUrl || !draft.apiKey) { connMsg.textContent = "Enter a panel URL and API key first."; return; }
+    connMsg.textContent = "Testing…";
+    const savedCfg = config; config = Object.assign({}, config, draft);
+    try {
+      const data = await ptFetch("/api/client/account");
+      connMsg.textContent = `Connected as ${data?.attributes?.email || "unknown user"}.`;
+    } catch (e) {
+      connMsg.textContent = "Failed: " + e.message + (e.message.includes("Failed to fetch") ? " (likely CORS — see note below)" : "");
+    } finally { config = savedCfg; }
+  });
+
+  document.getElementById("discoverBtn").addEventListener("click", async () => {
+    const draft = currentDraftConn();
+    if (!draft.panelUrl || !draft.apiKey) { connMsg.textContent = "Enter a panel URL and API key first."; return; }
+    connMsg.textContent = "Fetching…";
+    discoverResults.innerHTML = "";
+    const savedCfg = config; config = Object.assign({}, config, draft);
+    try {
+      const data = await ptFetch("/api/client");
+      const list = (data.data || []).map((s) => s.attributes);
+      if (!list.length) { connMsg.textContent = "No servers found on this account."; }
+      else {
+        connMsg.textContent = `Found ${list.length} server(s). Check the ones to add:`;
+        list.forEach((s) => {
+          const already = config.servers.some((x) => x.identifier === s.identifier);
+          const row = document.createElement("label");
+          row.className = "server-pick-row";
+          row.innerHTML = `<input type="checkbox" data-id="${s.identifier}" data-name="${escapeHtml(s.name)}" ${already ? "checked disabled" : ""}> <span>${escapeHtml(s.name)}</span> <span class="hint" style="color:var(--text-muted);margin-left:auto">${s.identifier}</span>`;
+          discoverResults.appendChild(row);
+        });
+      }
+    } catch (e) {
+      connMsg.textContent = "Failed: " + e.message + (e.message.includes("Failed to fetch") ? " (likely CORS — see note below)" : "");
+    } finally { config = savedCfg; }
+  });
+
+  document.getElementById("saveBtn").addEventListener("click", () => {
+    config.panelUrl = normalizeOrigin(panelUrlInput.value);
+    config.apiKey = apiKeyInput.value.trim();
+    config.planUrl = planUrlInput.value.trim().replace(/\/+$/, "");
+    config.planServerId = planServerIdInput.value.trim();
+    config.planApiKey = planApiKeyInput.value.trim();
+    discoverResults.querySelectorAll('input[type="checkbox"]:checked:not(:disabled)').forEach((cb) => {
+      config.servers.push({ identifier: cb.dataset.id, label: cb.dataset.name });
+    });
+    if (!config.activeId && config.servers.length) config.activeId = config.servers[0].identifier;
+    saveConfig(config);
+    closeModal();
+    refreshPlan();
+    render();
+  });
+
+  /* ============================== customize modal ============================== */
+  const customizeOverlay = document.getElementById("customizeOverlay");
+  const customizeList = document.getElementById("customizeList");
+  function openCustomize() { renderCustomizeList(); customizeOverlay.classList.add("open"); }
+  function closeCustomize() { customizeOverlay.classList.remove("open"); }
+  document.getElementById("customizeBtn").addEventListener("click", openCustomize);
+  document.getElementById("customizeDoneBtn").addEventListener("click", closeCustomize);
+  customizeOverlay.addEventListener("click", (e) => { if (e.target === customizeOverlay) closeCustomize(); });
+
+  function renderCustomizeList() {
+    customizeList.innerHTML = "";
+    const groups = [];
+    WIDGET_DEFS.forEach((w) => {
+      let g = groups.find((x) => x.name === w.group);
+      if (!g) { g = { name: w.group, items: [] }; groups.push(g); }
+      g.items.push(w);
+    });
+    groups.forEach((g) => {
+      const groupEl = document.createElement("div");
+      groupEl.className = "widget-group";
+      groupEl.innerHTML = `<div class="widget-group-title">${escapeHtml(g.name)}</div>`;
+      g.items.forEach((w) => {
+        const st = getWidgetState(w.id);
+        const row = document.createElement("div");
+        row.className = "widget-row";
+        const nameSpan = document.createElement("span");
+        nameSpan.className = "wname";
+        nameSpan.textContent = w.label;
+        row.appendChild(nameSpan);
+        const label = document.createElement("label");
+        label.className = "switch";
+        const input = document.createElement("input");
+        input.type = "checkbox"; input.checked = st.enabled;
+        input.addEventListener("change", () => setWidgetState(w.id, { enabled: input.checked }));
+        const track = document.createElement("span"); track.className = "track";
+        const thumb = document.createElement("span"); thumb.className = "thumb";
+        track.appendChild(thumb);
+        label.appendChild(input); label.appendChild(track);
+        row.appendChild(label);
+        groupEl.appendChild(row);
+      });
+      customizeList.appendChild(groupEl);
+    });
+  }
+
+  /* ============================== per-server runtime state ============================== */
+  const runtime = {}; // identifier -> { ws, wsRetryDelay, history:[], players:Map, alerts:[], resources:{}, details:{}, connected:false }
+
+  function getRuntime(id) {
+    if (!runtime[id]) {
+      runtime[id] = {
+        ws: null, wsRetryTimer: null, wsRetryDelay: 2000,
+        history: [], // {t, cpu, mem, disk, netRx, netTx}
+        prevNet: null,
+        players: new Map(), // name -> lastSeenTs
+        alerts: [], // {t, level, msg}
+        resources: null, details: null, connected: false
+      };
+    }
+    return runtime[id];
+  }
+
+  const MAX_HISTORY = 300;
+
+  function pushHistory(rt, sample) {
+    rt.history.push(sample);
+    if (rt.history.length > MAX_HISTORY) rt.history.shift();
+  }
+
+  /* ---------- websocket ---------- */
+  async function connectServer(identifier) {
+    const rt = getRuntime(identifier);
+    if (rt.ws) { try { rt.ws.close(); } catch (e) {} rt.ws = null; }
+    clearTimeout(rt.wsRetryTimer);
+    try {
+      const tokenData = await ptFetch(`/api/client/servers/${identifier}/websocket`);
+      const { token, socket } = tokenData.data;
+      const ws = new WebSocket(socket);
+      rt.ws = ws;
+      ws.addEventListener("open", () => {
+        ws.send(JSON.stringify({ event: "auth", args: [token] }));
+      });
+      ws.addEventListener("message", (ev) => handleWsMessage(identifier, rt, ev));
+      ws.addEventListener("close", () => {
+        rt.connected = false;
+        if (rt.ws === ws) scheduleReconnect(identifier);
+        renderIfActive(identifier);
+      });
+      ws.addEventListener("error", () => { try { ws.close(); } catch (e) {} });
+      rt.wsRetryDelay = 2000;
+    } catch (e) {
+      addAlert(rt, "warning", "Connection failed: " + e.message);
+      scheduleReconnect(identifier);
+      renderIfActive(identifier);
+    }
+  }
+
+  function scheduleReconnect(identifier) {
+    const rt = getRuntime(identifier);
+    clearTimeout(rt.wsRetryTimer);
+    rt.wsRetryTimer = setTimeout(() => connectServer(identifier), rt.wsRetryDelay);
+    rt.wsRetryDelay = Math.min(rt.wsRetryDelay * 1.6, 30000);
+  }
+
+  const JOIN_RE = /(?:\[[^\]]*\]\s*)?(?:\[Server thread\/INFO\]:\s*)?(\w{2,16}) joined the game/;
+  const LEAVE_RE = /(?:\[[^\]]*\]\s*)?(?:\[Server thread\/INFO\]:\s*)?(\w{2,16}) left the game/;
+  const CRIT_RE = /(SEVERE|FATAL|Exception in thread|OutOfMemoryError|Server thread\/CRASH|crashed)/i;
+  const ERR_RE = /(ERROR|Exception|failed to)/i;
+  const WARN_RE = /\bWARN\b/;
+
+  function handleWsMessage(identifier, rt, ev) {
+    let msg;
+    try { msg = JSON.parse(ev.data); } catch (e) { return; }
+    const event = msg.event, args = msg.args || [];
+    if (event === "auth success") {
+      rt.connected = true;
+      renderIfActive(identifier);
+    } else if (event === "stats") {
+      let stats;
+      try { stats = JSON.parse(args[0]); } catch (e) { return; }
+      applyStats(identifier, rt, stats);
+    } else if (event === "console output") {
+      const line = stripAnsi(String(args[0] || ""));
+      appendConsoleLine(identifier, line);
+      const jm = line.match(JOIN_RE);
+      const lm = line.match(LEAVE_RE);
+      if (jm) rt.players.set(jm[1], Date.now());
+      if (lm) rt.players.delete(lm[1]);
+      if (CRIT_RE.test(line)) addAlert(rt, "critical", line.slice(0, 200));
+      else if (ERR_RE.test(line)) addAlert(rt, "serious", line.slice(0, 200));
+      else if (WARN_RE.test(line)) addAlert(rt, "warning", line.slice(0, 200));
+      renderIfActive(identifier);
+    } else if (event === "token expiring") {
+      ptFetch(`/api/client/servers/${identifier}/websocket`).then((d) => {
+        if (rt.ws && rt.ws.readyState === WebSocket.OPEN) {
+          rt.ws.send(JSON.stringify({ event: "auth", args: [d.data.token] }));
+        }
+      }).catch(() => {});
+    } else if (event === "token expired") {
+      connectServer(identifier);
+    } else if (event === "daemon error" || event === "jwt error") {
+      addAlert(rt, "warning", "Daemon: " + (args[0] || event));
+    }
+  }
+
+  function addAlert(rt, level, msg) {
+    rt.alerts.unshift({ t: Date.now(), level, msg });
+    if (rt.alerts.length > 60) rt.alerts.length = 60;
+  }
+
+  function applyStats(identifier, rt, stats) {
+    const r = stats.resources || {};
+    const now = Date.now();
+    let netRxRate = null, netTxRate = null;
+    if (rt.prevNet && r.network_rx_bytes != null) {
+      const dt = (now - rt.prevNet.t) / 1000;
+      if (dt > 0) {
+        netRxRate = Math.max(0, (r.network_rx_bytes - rt.prevNet.rx) / dt);
+        netTxRate = Math.max(0, (r.network_tx_bytes - rt.prevNet.tx) / dt);
+      }
+    }
+    rt.prevNet = { t: now, rx: r.network_rx_bytes || 0, tx: r.network_tx_bytes || 0 };
+    rt.resources = {
+      state: stats.current_state,
+      isSuspended: !!stats.is_suspended,
+      cpu: r.cpu_absolute || 0,
+      memUsed: r.memory_bytes || 0,
+      diskUsed: r.disk_bytes || 0,
+      uptime: r.uptime || 0,
+      netRx: netRxRate, netTx: netTxRate
+    };
+    pushHistory(rt, {
+      t: now, cpu: r.cpu_absolute || 0, mem: r.memory_bytes || 0,
+      disk: r.disk_bytes || 0, netRx: netRxRate, netTx: netTxRate
+    });
+    renderIfActive(identifier);
+  }
+
+  const consoleBuffers = {}; // identifier -> array of lines
+  function appendConsoleLine(identifier, line) {
+    if (!consoleBuffers[identifier]) consoleBuffers[identifier] = [];
+    consoleBuffers[identifier].push(line);
+    if (consoleBuffers[identifier].length > 400) consoleBuffers[identifier].shift();
+  }
+
+  async function loadServerDetails(identifier) {
+    const rt = getRuntime(identifier);
+    try {
+      const data = await ptFetch(`/api/client/servers/${identifier}`);
+      rt.details = data.attributes;
+      renderIfActive(identifier);
+    } catch (e) { addAlert(rt, "warning", "Failed to load details: " + e.message); }
+  }
+
+  async function sendPower(identifier, signal) {
+    try { await ptFetch(`/api/client/servers/${identifier}/power`, { method: "POST", body: JSON.stringify({ signal }) }); }
+    catch (e) { const rt = getRuntime(identifier); addAlert(rt, "warning", "Power action failed: " + e.message); renderIfActive(identifier); }
+  }
+
+  /* ---------- Plan (Player Analytics) ---------- */
+  let planState = { status: "unconfigured", data: null, error: null };
+  async function refreshPlan() {
+    if (!config.planUrl) { planState = { status: "unconfigured", data: null, error: null }; scheduleRender(); return; }
+    planState = Object.assign({}, planState, { status: "loading" });
+    scheduleRender();
+    try {
+      // /v1/serverOverview is a documented Plan JSON endpoint (see
+      // json-endpoints.md in the Plan repo) that needs a `server` query param
+      // identifying the server *within Plan* — which may not match the
+      // Pterodactyl server UUID. Left blank, Plan may default to its only
+      // server or return an error naming the valid IDs; either way the raw
+      // response below tells us what to adjust next.
+      const q = config.planServerId ? `?server=${encodeURIComponent(config.planServerId)}` : "";
+      const data = await planFetch(`/v1/serverOverview${q}`);
+      planState = { status: "ok", data, error: null };
+    } catch (e) {
+      planState = { status: "error", data: null, error: e.message };
+    }
+    scheduleRender();
+  }
+  setInterval(refreshPlan, 60000);
+
+  /* ============================== rendering ============================== */
+  const tabsEl = document.getElementById("tabs");
+  const mainEl = document.getElementById("main");
+  let renderScheduled = false;
+
+  function renderIfActive(identifier) {
+    if (identifier !== config.activeId) return;
+    scheduleRender();
+  }
+  function scheduleRender() {
+    if (renderScheduled) return;
+    renderScheduled = true;
+    requestAnimationFrame(() => { renderScheduled = false; render(); });
+  }
+
+  function switchActive(identifier) {
+    config.activeId = identifier;
+    saveConfig(config);
+    render();
+  }
+
+  function render() {
+    renderTabs();
+    if (!config.servers.length) {
+      mainEl.innerHTML = "";
+      const es = document.createElement("div");
+      es.className = "empty-state";
+      es.innerHTML = `<h2>No server configured yet</h2><p>Add your Pterodactyl panel URL, API key, and pick which server(s) to watch.</p>`;
+      const btn = document.createElement("button");
+      btn.className = "btn"; btn.textContent = "Open settings";
+      btn.addEventListener("click", openModal);
+      es.appendChild(btn);
+      mainEl.appendChild(es);
+      return;
+    }
+    const active = config.servers.find((s) => s.identifier === config.activeId) || config.servers[0];
+    if (!active) return;
+    ensureConnected(active.identifier);
+    renderServer(active);
+  }
+
+  const startedIds = new Set();
+  function ensureConnected(identifier) {
+    if (startedIds.has(identifier)) return;
+    startedIds.add(identifier);
+    loadServerDetails(identifier);
+    connectServer(identifier);
+  }
+
+  function renderTabs() {
+    tabsEl.innerHTML = "";
+    config.servers.forEach((s) => {
+      const rt = getRuntime(s.identifier);
+      const tab = document.createElement("button");
+      tab.className = "tab" + (s.identifier === config.activeId ? " active" : "");
+      const dotClass = statusDotClass(rt);
+      tab.innerHTML = `<span class="dot ${dotClass}"></span><span>${escapeHtml(s.label)}</span>`;
+      tab.addEventListener("click", () => switchActive(s.identifier));
+      tabsEl.appendChild(tab);
+    });
+  }
+
+  function statusDotClass(rt) {
+    if (!rt.connected) return "muted";
+    if (!rt.resources) return "muted";
+    if (rt.resources.isSuspended) return "critical";
+    const st = rt.resources.state;
+    if (st === "running") return "good";
+    if (st === "starting" || st === "stopping") return "warning";
+    return "muted";
+  }
+  function statusLabel(rt) {
+    if (!rt.connected) return "Connecting…";
+    if (!rt.resources) return "Loading…";
+    if (rt.resources.isSuspended) return "Suspended";
+    const st = rt.resources.state;
+    if (st === "running") return "Online";
+    if (st === "starting") return "Starting…";
+    if (st === "stopping") return "Stopping…";
+    return "Offline";
+  }
+
+  function makeTileCard(id, label, valueText, colorVar, fraction, sparkValues, opts) {
+    opts = opts || {};
+    return makeCard(id, label, (body, expanded) => {
+      if (fraction != null) {
+        const track = document.createElement("div"); track.className = "meter-track";
+        const fill = document.createElement("div"); fill.className = "meter-fill";
+        fill.style.width = Math.max(0, Math.min(1, fraction)) * 100 + "%";
+        fill.style.background = `var(${colorVar})`;
+        track.appendChild(fill);
+        body.appendChild(track);
+      }
+      if (opts.subtext) {
+        const sub = document.createElement("div"); sub.className = "tile-subtext"; sub.textContent = opts.subtext;
+        body.appendChild(sub);
+      }
+      const canvas = document.createElement("canvas");
+      canvas.className = "spark" + (expanded ? " spark-lg" : "");
+      body.appendChild(canvas);
+      const vals = sparkValues.slice(expanded ? -60 : -24);
+      requestAnimationFrame(() => drawSparkline(canvas, vals, getCssVar(colorVar)));
+      if (expanded && opts.formatStat) {
+        const nums = sparkValues.filter((v) => v != null && !isNaN(v));
+        if (nums.length) {
+          const min = Math.min(...nums), max = Math.max(...nums), avg = nums.reduce((a, b) => a + b, 0) / nums.length;
+          const statsRow = document.createElement("div"); statsRow.className = "tile-stats";
+          statsRow.innerHTML = `<span>min ${opts.formatStat(min)}</span><span>avg ${opts.formatStat(avg)}</span><span>max ${opts.formatStat(max)}</span>`;
+          body.appendChild(statsRow);
+        }
+      }
+      return valueText;
+    }, { tile: true });
+  }
+
+  function powerCard(identifier, rt) {
+    return makeCard("power", "Power controls", (body) => {
+      const wrap = document.createElement("div");
+      wrap.className = "power-buttons";
+      [["start", "Start"], ["restart", "Restart"], ["stop", "Stop"], ["kill", "Kill"]].forEach(([sig, label]) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.textContent = label;
+        b.addEventListener("click", () => {
+          if (sig === "kill" && !confirm("Force-kill this server process?")) return;
+          sendPower(identifier, sig);
+        });
+        wrap.appendChild(b);
+      });
+      body.appendChild(wrap);
+      return statusLabel(rt);
+    });
+  }
+
+  function chartCard(rt, cpuLimit, memLimitBytes) {
+    return makeCard("chart-history", "CPU & memory over time", (body, expanded) => {
+      const legendRow = document.createElement("div");
+      legendRow.className = "legend-row";
+      legendRow.innerHTML = `
+        <span class="legend-item"><span class="legend-swatch" style="background:var(--slot-1)"></span>CPU</span>
+        <span class="legend-item"><span class="legend-swatch" style="background:var(--slot-2)"></span>Memory</span>
+      `;
+      body.appendChild(legendRow);
+      const chartWrap = document.createElement("div");
+      chartWrap.className = "chart-wrap";
+      const canvas = document.createElement("canvas");
+      canvas.className = "history";
+      const tooltip = document.createElement("div");
+      tooltip.className = "chart-tooltip";
+      chartWrap.appendChild(canvas);
+      chartWrap.appendChild(tooltip);
+      body.appendChild(chartWrap);
+      if (expanded) requestAnimationFrame(() => drawHistoryChart(canvas, tooltip, rt.history, cpuLimit, memLimitBytes));
+      const last = rt.history[rt.history.length - 1];
+      if (!last) return "";
+      const cpuPct = cpuLimit > 0 ? Math.min(100, (last.cpu / cpuLimit) * 100) : Math.min(100, last.cpu);
+      return `CPU ${cpuPct.toFixed(0)}%`;
+    });
+  }
+
+  function playersCard(rt) {
+    return makeCard("panel-players", "Players online", (body) => {
+      const names = Array.from(rt.players.keys());
+      if (names.length) {
+        const list = document.createElement("div");
+        list.className = "players-list";
+        names.forEach((n) => {
+          const chip = document.createElement("span");
+          chip.className = "player-chip";
+          chip.textContent = n;
+          list.appendChild(chip);
+        });
+        body.appendChild(list);
+      } else {
+        const hint = document.createElement("div");
+        hint.className = "empty-hint";
+        hint.textContent = "Detected from console join/leave messages — none seen this session yet.";
+        body.appendChild(hint);
+      }
+      return names.length ? `${names.length} online` : "0 online";
+    });
+  }
+
+  function alertsCard(rt) {
+    return makeCard("panel-alerts", "Alerts", (body) => {
+      const list = document.createElement("div");
+      list.className = "alerts-list";
+      if (rt.alerts.length) {
+        rt.alerts.forEach((a) => {
+          const row = document.createElement("div");
+          row.className = "alert-row";
+          row.innerHTML = `<span class="time">${fmtTime(a.t)}</span><span class="badge ${a.level}">${a.level}</span><span class="msg">${escapeHtml(a.msg)}</span>`;
+          list.appendChild(row);
+        });
+      } else {
+        list.innerHTML = `<div class="empty-hint">No warnings or errors detected.</div>`;
+      }
+      body.appendChild(list);
+      return rt.alerts.length ? `${rt.alerts.length} logged` : "none";
+    });
+  }
+
+  function planCard() {
+    return makeCard("panel-plan", "Player analytics (Plan)", (body) => {
+      if (planState.status === "unconfigured") {
+        body.innerHTML = `<div class="empty-hint">Add your Plan URL in Settings to enable this.</div>`;
+        return "not set up";
+      }
+      if (planState.status === "loading") {
+        body.innerHTML = `<div class="empty-hint">Loading…</div>`;
+        return "loading…";
+      }
+      if (planState.status === "error") {
+        const wrap = document.createElement("div");
+        wrap.className = "empty-hint";
+        wrap.textContent = `Couldn't load Plan data (${planState.error}). Endpoint is still being verified live.`;
+        body.appendChild(wrap);
+        const retry = document.createElement("button");
+        retry.className = "btn secondary"; retry.type = "button"; retry.style.marginTop = "8px";
+        retry.textContent = "Retry";
+        retry.addEventListener("click", (e) => { e.stopPropagation(); refreshPlan(); });
+        body.appendChild(retry);
+        return "error";
+      }
+      const pre = document.createElement("pre");
+      pre.style.cssText = "white-space:pre-wrap;font-size:11px;color:var(--text-secondary);margin:0;max-height:260px;overflow:auto;";
+      pre.textContent = JSON.stringify(planState.data, null, 2).slice(0, 4000);
+      body.appendChild(pre);
+      return "connected";
+    });
+  }
+
+  function consoleCard(identifier) {
+    return makeCard("panel-console", "Console tail", (body) => {
+      const consoleEl = document.createElement("div");
+      consoleEl.className = "console";
+      const buf = consoleBuffers[identifier] || [];
+      buf.forEach((line) => {
+        const div = document.createElement("div");
+        div.className = "line" + (CRIT_RE.test(line) ? " crit" : ERR_RE.test(line) ? " hit" : "");
+        div.textContent = line;
+        consoleEl.appendChild(div);
+      });
+      body.appendChild(consoleEl);
+      consoleEl.scrollTop = consoleEl.scrollHeight;
+      return "";
+    });
+  }
+
+  function renderServer(server) {
+    const identifier = server.identifier;
+    const rt = getRuntime(identifier);
+    const d = rt.details || {};
+    const res = rt.resources;
+    const cpuLimit = (d.limits && d.limits.cpu) || 0;
+    const memLimitBytes = (d.limits && d.limits.memory ? d.limits.memory * 1024 * 1024 : 0);
+    const diskLimitBytes = (d.limits && d.limits.disk ? d.limits.disk * 1024 * 1024 : 0);
+
+    mainEl.innerHTML = "";
+
+    if (!rt.connected) {
+      const banner = document.createElement("div");
+      banner.className = "status-banner warning";
+      banner.textContent = "Reconnecting to console/stats socket…";
+      mainEl.appendChild(banner);
+    }
+
+    const hdr = document.createElement("div");
+    hdr.className = "server-header";
+    const dotClass = statusDotClass(rt);
+    hdr.innerHTML = `
+      <span class="dot ${dotClass}"></span>
+      <span class="name">${escapeHtml(server.label)}</span>
+      <span class="state-label" style="color:var(--status-${dotClass === 'muted' ? 'muted' : dotClass})">${statusLabel(rt)}</span>
+      <span class="meta">${res ? "uptime " + fmtUptime(res.uptime) : ""}</span>
+      <span class="meta">${d.node ? "node " + escapeHtml(d.node) : ""}</span>
+    `;
+    mainEl.appendChild(hdr);
+
+    const power = powerCard(identifier, rt);
+    if (power) mainEl.appendChild(power);
+
+    const grid = document.createElement("div");
+    grid.className = "tile-grid";
+    const tileCards = [
+      makeTileCard("tile-cpu", "CPU", res ? res.cpu.toFixed(1) + "%" : "—", "--slot-1",
+        cpuLimit > 0 ? Math.min(1, res ? res.cpu / cpuLimit : 0) : (res ? Math.min(1, res.cpu / 100) : 0),
+        rt.history.map((h) => h.cpu), { formatStat: (v) => v.toFixed(1) + "%" }),
+      makeTileCard("tile-memory", "Memory", res ? fmtBytes(res.memUsed) : "—", "--slot-2",
+        (res && memLimitBytes > 0) ? Math.min(1, res.memUsed / memLimitBytes) : 0,
+        rt.history.map((h) => h.mem),
+        { subtext: memLimitBytes ? "of " + fmtBytes(memLimitBytes) : "no limit set", formatStat: fmtBytes }),
+      makeTileCard("tile-disk", "Disk", res ? fmtBytes(res.diskUsed) : "—", "--slot-3",
+        (res && diskLimitBytes > 0) ? Math.min(1, res.diskUsed / diskLimitBytes) : 0,
+        rt.history.map((h) => h.disk),
+        { subtext: diskLimitBytes ? "of " + fmtBytes(diskLimitBytes) : "no limit set", formatStat: fmtBytes }),
+      makeTileCard("tile-net-in", "Network in", res ? fmtRate(res.netRx) : "—", "--slot-4", null,
+        rt.history.map((h) => h.netRx || 0), { formatStat: fmtRate }),
+      makeTileCard("tile-net-out", "Network out", res ? fmtRate(res.netTx) : "—", "--slot-7", null,
+        rt.history.map((h) => h.netTx || 0), { formatStat: fmtRate })
+    ].filter(Boolean);
+    tileCards.forEach((c) => grid.appendChild(c));
+    if (tileCards.length) mainEl.appendChild(grid);
+
+    const chart = chartCard(rt, cpuLimit, memLimitBytes);
+    if (chart) mainEl.appendChild(chart);
+
+    const twoCol = document.createElement("div");
+    twoCol.className = "two-col";
+    [playersCard(rt), alertsCard(rt), planCard()].forEach((c) => { if (c) twoCol.appendChild(c); });
+    if (twoCol.children.length) mainEl.appendChild(twoCol);
+
+    const consoleC = consoleCard(identifier);
+    if (consoleC) mainEl.appendChild(consoleC);
+  }
+
+  function getCssVar(name) {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  }
+
+  function drawSparkline(canvas, values, color) {
+    if (!canvas.isConnected) return;
+    const dpr = window.devicePixelRatio || 1;
+    const w = canvas.clientWidth || 160, h = canvas.clientHeight || 30;
+    canvas.width = w * dpr; canvas.height = h * dpr;
+    const ctx = canvas.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    const vals = values.filter((v) => v != null && !isNaN(v));
+    if (vals.length < 2) return;
+    const min = Math.min(...vals), max = Math.max(...vals);
+    const range = max - min || 1;
+    const pad = 3;
+    const stepX = (w - pad * 2) / (vals.length - 1);
+    const muted = getCssVar("--text-muted") || "#898781";
+    ctx.beginPath();
+    vals.forEach((v, i) => {
+      const x = pad + i * stepX;
+      const y = h - pad - ((v - min) / range) * (h - pad * 2);
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.strokeStyle = muted;
+    ctx.lineWidth = 2;
+    ctx.lineJoin = "round"; ctx.lineCap = "round";
+    ctx.stroke();
+    if (vals.length >= 2) {
+      const n = vals.length;
+      const x1 = pad + (n - 2) * stepX, y1 = h - pad - ((vals[n - 2] - min) / range) * (h - pad * 2);
+      const x2 = pad + (n - 1) * stepX, y2 = h - pad - ((vals[n - 1] - min) / range) * (h - pad * 2);
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
+      ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke();
+      const surface = getCssVar("--surface-1") || "#fff";
+      ctx.beginPath(); ctx.arc(x2, y2, 4, 0, Math.PI * 2);
+      ctx.fillStyle = color; ctx.fill();
+      ctx.lineWidth = 2; ctx.strokeStyle = surface; ctx.stroke();
+    }
+  }
+
+  function drawHistoryChart(canvas, tooltip, history, cpuLimit, memLimitBytes) {
+    const dpr = window.devicePixelRatio || 1;
+    const w = canvas.clientWidth || 600, h = canvas.clientHeight || 160;
+    canvas.width = w * dpr; canvas.height = h * dpr;
+    const ctx = canvas.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    const pad = { l: 34, r: 8, t: 10, b: 18 };
+    const plotW = w - pad.l - pad.r, plotH = h - pad.t - pad.b;
+    const grid = getCssVar("--grid"), muted = getCssVar("--text-muted");
+    const cpuColor = getCssVar("--slot-1"), memColor = getCssVar("--slot-2");
+
+    ctx.font = "10px system-ui, sans-serif";
+    ctx.fillStyle = muted;
+    ctx.strokeStyle = grid;
+    ctx.lineWidth = 1;
+    [0, 25, 50, 75, 100].forEach((p) => {
+      const y = pad.t + plotH - (p / 100) * plotH;
+      ctx.beginPath(); ctx.moveTo(pad.l, y + 0.5); ctx.lineTo(w - pad.r, y + 0.5); ctx.stroke();
+      ctx.fillText(p + "%", 2, y + 3);
+    });
+
+    if (!history.length) return;
+    const n = history.length;
+    const stepX = n > 1 ? plotW / (n - 1) : 0;
+    const cpuPct = (h_) => cpuLimit > 0 ? Math.min(100, (h_.cpu / cpuLimit) * 100) : Math.min(100, h_.cpu);
+    const memPct = (h_) => memLimitBytes > 0 ? Math.min(100, (h_.mem / memLimitBytes) * 100) : 0;
+
+    function drawSeries(getVal, color) {
+      ctx.beginPath();
+      history.forEach((s, i) => {
+        const x = pad.l + i * stepX, y = pad.t + plotH - (getVal(s) / 100) * plotH;
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      });
+      ctx.lineTo(pad.l + (n - 1) * stepX, pad.t + plotH);
+      ctx.lineTo(pad.l, pad.t + plotH);
+      ctx.closePath();
+      ctx.fillStyle = color + "1a";
+      ctx.fill();
+      ctx.beginPath();
+      history.forEach((s, i) => {
+        const x = pad.l + i * stepX, y = pad.t + plotH - (getVal(s) / 100) * plotH;
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      });
+      ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.lineJoin = "round"; ctx.lineCap = "round";
+      ctx.stroke();
+      const last = history[n - 1];
+      const lx = pad.l + (n - 1) * stepX, ly = pad.t + plotH - (getVal(last) / 100) * plotH;
+      const surface = getCssVar("--surface-1") || "#fff";
+      ctx.beginPath(); ctx.arc(lx, ly, 4, 0, Math.PI * 2); ctx.fillStyle = color; ctx.fill();
+      ctx.lineWidth = 2; ctx.strokeStyle = surface; ctx.stroke();
+      return { lx, ly, label: getVal(last).toFixed(0) + "%", color };
+    }
+    const memEnd = drawSeries(memPct, memColor);
+    const cpuEnd = drawSeries(cpuPct, cpuColor);
+
+    ctx.font = "11px system-ui, sans-serif";
+    const labelsCollide = Math.abs(memEnd.ly - cpuEnd.ly) < 14;
+    if (!labelsCollide) {
+      [memEnd, cpuEnd].forEach(({ lx, ly, label, color }) => {
+        ctx.fillStyle = color;
+        const tw = ctx.measureText(label).width;
+        const lxClamped = Math.min(lx, w - pad.r - tw);
+        ctx.fillText(label, lxClamped, Math.max(10, ly - 6));
+      });
+    }
+
+    canvas.onmousemove = canvas.ontouchmove = (ev) => {
+      const rect = canvas.getBoundingClientRect();
+      const clientX = ev.touches ? ev.touches[0].clientX : ev.clientX;
+      const x = clientX - rect.left;
+      let idx = Math.round((x - pad.l) / (stepX || 1));
+      idx = Math.max(0, Math.min(n - 1, idx));
+      const s = history[idx];
+      if (!s) return;
+      const px = pad.l + idx * stepX;
+      tooltip.style.left = px + "px";
+      tooltip.style.top = "0px";
+      tooltip.style.display = "block";
+      tooltip.innerHTML = `${fmtTime(s.t)}<br>CPU ${cpuPct(s).toFixed(1)}%<br>Mem ${memPct(s).toFixed(1)}% (${fmtBytes(s.mem)})`;
+    };
+    canvas.onmouseleave = () => { tooltip.style.display = "none"; };
+  }
+
+  setInterval(() => { if (config.activeId) scheduleRender(); }, 5000);
+
+  refreshPlan();
+  render();
+})();
+</script>
+</body>
+</html>
