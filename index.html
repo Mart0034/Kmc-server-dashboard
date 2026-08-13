@@ -948,6 +948,13 @@
   const tabsEl = document.getElementById("tabs");
   const mainEl = document.getElementById("main");
   let renderScheduled = false;
+  let lastRenderAt = 0;
+  let pendingCanvasDraws = [];
+  // The full widget tree is rebuilt on every render (simplest correct approach given
+  // how the app is structured), so throttle how often that actually happens rather
+  // than doing it on every single incoming stats/console message (~1/sec) — that was
+  // the main source of visible flicker and unnecessary churn.
+  const MIN_RENDER_INTERVAL_MS = 3000;
 
   function renderIfActive(identifier) {
     if (identifier !== config.activeId) return;
@@ -956,7 +963,8 @@
   function scheduleRender() {
     if (renderScheduled) return;
     renderScheduled = true;
-    requestAnimationFrame(() => { renderScheduled = false; render(); });
+    const delay = Math.max(0, MIN_RENDER_INTERVAL_MS - (Date.now() - lastRenderAt));
+    setTimeout(() => { renderScheduled = false; lastRenderAt = Date.now(); render(); }, delay);
   }
 
   function switchActive(identifier) {
@@ -1045,7 +1053,7 @@
       canvas.className = "spark" + (expanded ? " spark-lg" : "");
       body.appendChild(canvas);
       const vals = sparkValues.slice(expanded ? -60 : -24);
-      requestAnimationFrame(() => drawSparkline(canvas, vals, getCssVar(colorVar)));
+      pendingCanvasDraws.push(() => drawSparkline(canvas, vals, getCssVar(colorVar)));
       if (expanded && opts.formatStat) {
         const nums = sparkValues.filter((v) => v != null && !isNaN(v));
         if (nums.length) {
@@ -1096,7 +1104,7 @@
       chartWrap.appendChild(canvas);
       chartWrap.appendChild(tooltip);
       body.appendChild(chartWrap);
-      if (expanded) requestAnimationFrame(() => drawHistoryChart(canvas, tooltip, rt.history, cpuLimit, memLimitBytes));
+      if (expanded) pendingCanvasDraws.push(() => drawHistoryChart(canvas, tooltip, rt.history, cpuLimit, memLimitBytes));
       const last = rt.history[rt.history.length - 1];
       if (!last) return "";
       const cpuPct = cpuLimit > 0 ? Math.min(100, (last.cpu / cpuLimit) * 100) : Math.min(100, last.cpu);
@@ -1176,7 +1184,7 @@
     });
   }
 
-  function consoleCard(identifier) {
+  function consoleCard(identifier, wasAtBottom) {
     return makeCard("panel-console", "Console tail", (body) => {
       const consoleEl = document.createElement("div");
       consoleEl.className = "console";
@@ -1188,7 +1196,10 @@
         consoleEl.appendChild(div);
       });
       body.appendChild(consoleEl);
-      consoleEl.scrollTop = consoleEl.scrollHeight;
+      // Only auto-follow the tail if the reader was already at (or near) the bottom —
+      // otherwise a rebuild while they've scrolled up to read history would yank them
+      // back down every render.
+      if (wasAtBottom !== false) consoleEl.scrollTop = consoleEl.scrollHeight;
       return "";
     });
   }
@@ -1202,6 +1213,12 @@
     const memLimitBytes = (d.limits && d.limits.memory ? d.limits.memory * 1024 * 1024 : 0);
     const diskLimitBytes = (d.limits && d.limits.disk ? d.limits.disk * 1024 * 1024 : 0);
 
+    const oldConsoleEl = mainEl.querySelector(".console");
+    const consoleWasAtBottom = oldConsoleEl
+      ? (oldConsoleEl.scrollHeight - oldConsoleEl.scrollTop - oldConsoleEl.clientHeight) < 40
+      : true;
+
+    pendingCanvasDraws = [];
     mainEl.innerHTML = "";
 
     if (!rt.connected) {
@@ -1260,8 +1277,14 @@
     [playersCard(rt), alertsCard(rt), planCard()].forEach((c) => { if (c) twoCol.appendChild(c); });
     if (twoCol.children.length) mainEl.appendChild(twoCol);
 
-    const consoleC = consoleCard(identifier);
+    const consoleC = consoleCard(identifier, consoleWasAtBottom);
     if (consoleC) mainEl.appendChild(consoleC);
+
+    // Everything above is now attached to the live document, so canvases have real
+    // layout dimensions — draw synchronously in this same pass rather than deferring
+    // to another frame, so nothing paints blank-then-fills-in.
+    pendingCanvasDraws.forEach((fn) => fn());
+    pendingCanvasDraws = [];
   }
 
   function getCssVar(name) {
