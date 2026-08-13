@@ -246,6 +246,51 @@
   }
   .power-buttons button:hover { filter: brightness(1.06); }
 
+  /* ---------- two-column layout (wide/landscape) ---------- */
+  .split { display: flex; flex-direction: column; gap: 10px; }
+  .split .col { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  @media (min-width: 900px) {
+    .split { display: grid; grid-template-columns: 1fr 1fr; align-items: start; }
+  }
+
+  /* ---------- TPS / MSPT ---------- */
+  .tps-readout { display: flex; align-items: baseline; gap: 16px; margin-bottom: 4px; }
+  .tps-readout .stat { display: flex; flex-direction: column; gap: 2px; }
+  .tps-readout .stat .val { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .tps-readout .stat .lbl { font-size: 11px; color: var(--text-muted); }
+  .tps-readout .stat .val.good { color: var(--status-good); }
+  .tps-readout .stat .val.warning { color: var(--status-warning); }
+  .tps-readout .stat .val.critical { color: var(--status-critical); }
+
+  /* ---------- in-game clock (kept small) ---------- */
+  .clock-row { display: flex; align-items: center; gap: 10px; }
+  .clock-row .clock-icon { width: 26px; height: 26px; flex: none; color: var(--text-secondary); }
+  .clock-row .clock-time { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .clock-row .clock-world { font-size: 11px; color: var(--text-muted); }
+
+  /* ---------- SquareMap ---------- */
+  .map-wrap { position: relative; }
+  .map-wrap iframe { width: 100%; height: 360px; border: 1px solid var(--border); border-radius: 10px; display: block; background: var(--surface-0); }
+  .map-open-link {
+    display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 12px; font-weight: 600;
+    color: var(--slot-1); text-decoration: none;
+  }
+  .map-open-link:hover { text-decoration: underline; }
+
+  /* ---------- kiosk / wall-display mode ---------- */
+  body.kiosk header .icon-btn:not(.kiosk-exit) { display: none; }
+  body.kiosk main { max-width: none; padding: 20px; }
+  body.kiosk .card-title { font-size: 14px; }
+  body.kiosk .card-summary { font-size: 16px; }
+  body.kiosk .card.tile-card .card-summary { font-size: 26px; }
+  body.kiosk .server-header .name { font-size: 24px; }
+  body.kiosk .server-header .state-label { font-size: 16px; }
+  body.kiosk .server-header .meta { font-size: 14px; }
+  body.kiosk .clock-row .clock-time { font-size: 26px; }
+  body.kiosk .tps-readout .stat .val { font-size: 28px; }
+  .kiosk-exit { display: none; }
+  body.kiosk .kiosk-exit { display: flex; }
+
   /* ---------- modals ---------- */
   .modal-overlay {
     position: fixed; inset: 0; background: rgba(0,0,0,.5); display: none;
@@ -295,6 +340,8 @@
   <header>
     <h1>Server Dashboard</h1>
     <div class="tabs" id="tabs"></div>
+    <button class="icon-btn kiosk-exit" id="kioskExitBtn" title="Exit kiosk mode"></button>
+    <button class="icon-btn" id="kioskBtn" title="Kiosk / wall-display mode"></button>
     <button class="icon-btn" id="customizeBtn" title="Customize widgets"></button>
     <button class="icon-btn" id="themeToggle" title="Toggle theme"></button>
     <button class="icon-btn" id="settingsBtn" title="Settings"></button>
@@ -363,6 +410,23 @@
       <div class="hint">Powers the Player analytics widget, which currently shows the raw response so we can see exactly what comes back and fix the mapping together.</div>
     </div>
 
+    <div class="field" style="margin-top:18px;">
+      <label for="squaremapUrl">Live map (SquareMap) URL &mdash; optional</label>
+      <input id="squaremapUrl" placeholder="http://your-squaremap-host:port" autocomplete="off" autocapitalize="off" spellcheck="false">
+      <div class="hint">If this isn't served over https://, the embedded map likely won't load (mixed content) &mdash; the "open in new tab" link will still work either way.</div>
+    </div>
+
+    <div class="field">
+      <label for="primaryWorld">Primary world name (for the clock widget)</label>
+      <input id="primaryWorld" placeholder="world" autocomplete="off" autocapitalize="off" spellcheck="false">
+      <div class="hint">Sent as <code>/time</code> in console and matched by world name &mdash; change this if your main world isn't called "world".</div>
+    </div>
+
+    <div class="field">
+      <label for="kioskCycleSeconds">Kiosk mode: seconds per server before auto-switching</label>
+      <input id="kioskCycleSeconds" placeholder="20" inputmode="numeric" autocomplete="off">
+    </div>
+
     <div class="modal-actions">
       <button class="btn" id="saveBtn">Save &amp; close</button>
       <button class="btn secondary" id="closeBtn">Cancel</button>
@@ -391,13 +455,22 @@
   const SLIDERS_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="14" y2="6"/><circle cx="17" cy="6" r="2"/><line x1="10" y1="12" x2="20" y2="12"/><circle cx="7" cy="12" r="2"/><line x1="4" y1="18" x2="14" y2="18"/><circle cx="17" cy="18" r="2"/></svg>';
   const SUN_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>';
   const CHEVRON_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
+  const MOON_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+  const MONITOR_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>';
+  const EXIT_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>';
   document.getElementById("settingsBtn").innerHTML = GEAR_SVG;
   document.getElementById("customizeBtn").innerHTML = SLIDERS_SVG;
   document.getElementById("themeToggle").innerHTML = SUN_SVG;
+  document.getElementById("kioskBtn").innerHTML = MONITOR_SVG;
+  document.getElementById("kioskExitBtn").innerHTML = EXIT_SVG;
 
   /* ============================== state / storage ============================== */
   const STORAGE_KEY = "kmc-dashboard-config-v1";
-  const CONFIG_DEFAULTS = { panelUrl: "", apiKey: "", servers: [], activeId: null, widgets: {}, planUrl: "", planApiKey: "", planServerId: "" };
+  const CONFIG_DEFAULTS = {
+    panelUrl: "", apiKey: "", servers: [], activeId: null, widgets: {},
+    planUrl: "", planApiKey: "", planServerId: "",
+    squaremapUrl: "", primaryWorld: "world", kioskCycleSeconds: 20
+  };
   function loadConfig() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -423,6 +496,36 @@
     applyTheme(next);
   });
 
+  /* ---------- kiosk / wall-display mode ---------- */
+  const KIOSK_KEY = "kmc-dashboard-kiosk";
+  let kioskCycleTimer = null;
+
+  function startKioskCycle() {
+    clearInterval(kioskCycleTimer);
+    if (config.servers.length < 2) return;
+    const seconds = Math.max(5, config.kioskCycleSeconds || 20);
+    kioskCycleTimer = setInterval(() => {
+      const idx = config.servers.findIndex((s) => s.identifier === config.activeId);
+      const next = config.servers[(idx + 1) % config.servers.length];
+      if (next) switchActive(next.identifier);
+    }, seconds * 1000);
+  }
+  function stopKioskCycle() { clearInterval(kioskCycleTimer); kioskCycleTimer = null; }
+
+  function applyKiosk(on) {
+    document.body.classList.toggle("kiosk", on);
+    if (on) startKioskCycle(); else stopKioskCycle();
+  }
+  function setKiosk(on) {
+    localStorage.setItem(KIOSK_KEY, on ? "1" : "0");
+    applyKiosk(on);
+    if (on) { try { document.documentElement.requestFullscreen().catch(() => {}); } catch (e) {} }
+    else if (document.fullscreenElement) { try { document.exitFullscreen().catch(() => {}); } catch (e) {} }
+  }
+  applyKiosk(localStorage.getItem(KIOSK_KEY) === "1");
+  document.getElementById("kioskBtn").addEventListener("click", () => setKiosk(true));
+  document.getElementById("kioskExitBtn").addEventListener("click", () => setKiosk(false));
+
   /* ============================== widgets ============================== */
   const WIDGET_DEFS = [
     { id: "power",         label: "Power controls",             group: "Controls",       defaultEnabled: true, defaultExpanded: true },
@@ -432,11 +535,27 @@
     { id: "tile-net-in",   label: "Network in",                  group: "Resource tiles", defaultEnabled: true, defaultExpanded: true },
     { id: "tile-net-out",  label: "Network out",                 group: "Resource tiles", defaultEnabled: true, defaultExpanded: true },
     { id: "chart-history", label: "CPU & memory chart",          group: "Charts",         defaultEnabled: true, defaultExpanded: true },
+    { id: "chart-tps",     label: "TPS / MSPT",                  group: "Charts",         defaultEnabled: true, defaultExpanded: true },
     { id: "panel-players", label: "Players online",              group: "Panels",         defaultEnabled: true, defaultExpanded: true },
     { id: "panel-alerts",  label: "Alerts",                      group: "Panels",         defaultEnabled: true, defaultExpanded: true },
     { id: "panel-plan",    label: "Player analytics (Plan)",     group: "Panels",         defaultEnabled: true, defaultExpanded: true },
+    { id: "panel-squaremap", label: "Live map (SquareMap)",      group: "Panels",         defaultEnabled: true, defaultExpanded: true },
+    { id: "panel-clock",   label: "In-game clock",                group: "Panels",         defaultEnabled: true, defaultExpanded: true },
     { id: "panel-console", label: "Console tail",                group: "Panels",         defaultEnabled: true, defaultExpanded: true }
   ];
+
+  // Which column each widget lands in for the two-column layout (wide/landscape).
+  // Widgets not listed here (header, power, resource tiles) render full-width above.
+  const WIDGET_COLUMN = {
+    "chart-history": "left",
+    "chart-tps": "left",
+    "panel-squaremap": "left",
+    "panel-console": "left",
+    "panel-players": "right",
+    "panel-alerts": "right",
+    "panel-plan": "right",
+    "panel-clock": "right"
+  };
 
   function getWidgetState(id) {
     const def = WIDGET_DEFS.find((w) => w.id === id) || { defaultEnabled: true, defaultExpanded: true };
@@ -570,6 +689,9 @@
   const planUrlInput = document.getElementById("planUrl");
   const planServerIdInput = document.getElementById("planServerId");
   const planApiKeyInput = document.getElementById("planApiKey");
+  const squaremapUrlInput = document.getElementById("squaremapUrl");
+  const primaryWorldInput = document.getElementById("primaryWorld");
+  const kioskCycleSecondsInput = document.getElementById("kioskCycleSeconds");
   const connMsg = document.getElementById("connMsg");
   const discoverResults = document.getElementById("discoverResults");
   const configuredList = document.getElementById("configuredList");
@@ -581,6 +703,9 @@
     planUrlInput.value = config.planUrl || "";
     planServerIdInput.value = config.planServerId || "";
     planApiKeyInput.value = config.planApiKey || "";
+    squaremapUrlInput.value = config.squaremapUrl || "";
+    primaryWorldInput.value = config.primaryWorld || "world";
+    kioskCycleSecondsInput.value = config.kioskCycleSeconds || 20;
     connMsg.textContent = "";
     discoverResults.innerHTML = "";
     renderConfiguredList();
@@ -686,6 +811,9 @@
     config.planUrl = planUrlInput.value.trim().replace(/\/+$/, "");
     config.planServerId = planServerIdInput.value.trim();
     config.planApiKey = planApiKeyInput.value.trim();
+    config.squaremapUrl = squaremapUrlInput.value.trim().replace(/\/+$/, "");
+    config.primaryWorld = primaryWorldInput.value.trim() || "world";
+    config.kioskCycleSeconds = Math.max(5, parseInt(kioskCycleSecondsInput.value, 10) || 20);
     discoverResults.querySelectorAll('input[type="checkbox"]:checked:not(:disabled)').forEach((cb) => {
       config.servers.push({ identifier: cb.dataset.id, label: cb.dataset.name });
     });
@@ -749,10 +877,13 @@
       runtime[id] = {
         ws: null, wsRetryTimer: null, wsRetryDelay: 2000,
         history: [], // {t, cpu, mem, disk, netRx, netTx}
+        tpsHistory: [], // {t, tps}
         prevNet: null,
         players: new Map(), // name -> lastSeenTs
         alerts: [], // {t, level, msg}
-        resources: null, details: null, connected: false
+        resources: null, details: null, connected: false,
+        tps: null, mspt: null, pendingMspt: false, gameTime: null,
+        queryTimer: null
       };
     }
     return runtime[id];
@@ -785,6 +916,7 @@
       ws.addEventListener("message", (ev) => handleWsMessage(identifier, rt, ev));
       ws.addEventListener("close", (ev) => {
         rt.connected = false;
+        stopGameDataQueries(identifier);
         rt.lastClose = {
           code: ev.code,
           reason: ev.reason || "(browser gave no reason — common for connection-level rejections)",
@@ -824,6 +956,41 @@
   const CRIT_RE = /(SEVERE|FATAL|Exception in thread|OutOfMemoryError|Server thread\/CRASH|crashed)/i;
   const ERR_RE = /(ERROR|Exception|failed to)/i;
   const WARN_RE = /\bWARN\b/;
+  // Formats confirmed live against a Paper server running EssentialsX — see commit
+  // history for the raw captures. TPS/MSPT come from vanilla-style /tps and /mspt;
+  // the world clock comes from EssentialsX's /time (bare, no args), which reports
+  // per-world and needs a world-name match since a network can have many worlds.
+  const TPS_RE = /TPS from last[^:]*:\s*([\d.,\s]+)/i;
+  const MSPT_HEADER_RE = /Server tick times.*from last/i;
+  const MSPT_DATA_RE = /(\d+\.?\d*)\s*\/\s*(\d+\.?\d*)\s*\/\s*(\d+\.?\d*)/;
+  const TIME_RE = /The current time in (\S+) is \d{1,2}:\d{2} or ([\d: ]+[AP]M) or (\d+) ticks\.?/i;
+
+  function parseGameDataLine(identifier, rt, line) {
+    const tpsMatch = line.match(TPS_RE);
+    if (tpsMatch) {
+      const parts = tpsMatch[1].split(",").map((s) => parseFloat(s.trim())).filter((n) => !isNaN(n));
+      if (parts.length) {
+        rt.tps = { oneMin: parts[0], fiveMin: parts[1], fifteenMin: parts[2], t: Date.now() };
+        rt.tpsHistory.push({ t: Date.now(), tps: parts[0] });
+        if (rt.tpsHistory.length > MAX_HISTORY) rt.tpsHistory.shift();
+      }
+      return;
+    }
+    if (MSPT_HEADER_RE.test(line)) {
+      rt.pendingMspt = true;
+      return;
+    }
+    if (rt.pendingMspt) {
+      rt.pendingMspt = false;
+      const m = line.match(MSPT_DATA_RE);
+      if (m) rt.mspt = { avg: parseFloat(m[1]), min: parseFloat(m[2]), max: parseFloat(m[3]), t: Date.now() };
+      return;
+    }
+    const timeMatch = line.match(TIME_RE);
+    if (timeMatch && timeMatch[1].toLowerCase() === (config.primaryWorld || "world").toLowerCase()) {
+      rt.gameTime = { world: timeMatch[1], time12h: timeMatch[2].trim(), ticks: parseInt(timeMatch[3], 10), t: Date.now() };
+    }
+  }
 
   function handleWsMessage(identifier, rt, ev) {
     let msg;
@@ -832,6 +999,7 @@
     if (event === "auth success") {
       rt.connected = true;
       rt.wsAuthed = true;
+      startGameDataQueries(identifier);
       renderIfActive(identifier);
     } else if (event === "stats") {
       let stats;
@@ -850,6 +1018,7 @@
       if (CRIT_RE.test(line)) addAlert(rt, "critical", line.slice(0, 200));
       else if (ERR_RE.test(line)) addAlert(rt, "serious", line.slice(0, 200));
       else if (WARN_RE.test(line)) addAlert(rt, "warning", line.slice(0, 200));
+      parseGameDataLine(identifier, rt, line);
       renderIfActive(identifier);
     } else if (event === "token expiring") {
       ptFetch(`/api/client/servers/${identifier}/websocket`).then((d) => {
@@ -919,6 +1088,38 @@
   async function sendPower(identifier, signal) {
     try { await ptFetch(`/api/client/servers/${identifier}/power`, { method: "POST", body: JSON.stringify({ signal }) }); }
     catch (e) { const rt = getRuntime(identifier); addAlert(rt, "warning", "Power action failed: " + e.message); renderIfActive(identifier); }
+  }
+
+  async function sendCommand(identifier, command) {
+    try { await ptFetch(`/api/client/servers/${identifier}/command`, { method: "POST", body: JSON.stringify({ command }) }); }
+    catch (e) { /* best-effort background query — surfacing this as an alert would be noisier than useful */ }
+  }
+
+  // TPS/MSPT and the in-game clock aren't exposed by Pterodactyl at all — they only
+  // exist by periodically asking the game's own console and parsing the reply, and
+  // only while the widget that uses them is enabled (so we're not sending commands
+  // into someone's console for a widget they've turned off).
+  function startGameDataQueries(identifier) {
+    const rt = getRuntime(identifier);
+    clearInterval(rt.queryTimer);
+    rt.queryTimer = setInterval(() => {
+      if (getWidgetState("chart-tps").enabled) {
+        sendCommand(identifier, "tps");
+        sendCommand(identifier, "mspt");
+      }
+    }, 20000);
+    clearInterval(rt.clockTimer);
+    rt.clockTimer = setInterval(() => {
+      if (getWidgetState("panel-clock").enabled) sendCommand(identifier, "time");
+    }, 60000);
+    // Fire once immediately rather than waiting a full interval after connecting.
+    if (getWidgetState("chart-tps").enabled) { sendCommand(identifier, "tps"); sendCommand(identifier, "mspt"); }
+    if (getWidgetState("panel-clock").enabled) sendCommand(identifier, "time");
+  }
+  function stopGameDataQueries(identifier) {
+    const rt = getRuntime(identifier);
+    clearInterval(rt.queryTimer);
+    clearInterval(rt.clockTimer);
   }
 
   /* ---------- Plan (Player Analytics) ---------- */
@@ -1112,6 +1313,90 @@
     });
   }
 
+  function tpsColorClass(v) {
+    if (v == null) return "";
+    if (v >= 19.5) return "good";
+    if (v >= 15) return "warning";
+    return "critical";
+  }
+
+  function tpsCard(rt) {
+    return makeCard("chart-tps", "TPS / MSPT", (body, expanded) => {
+      const readout = document.createElement("div");
+      readout.className = "tps-readout";
+      const tpsVal = rt.tps ? rt.tps.oneMin.toFixed(1) : "—";
+      readout.innerHTML = `
+        <div class="stat"><span class="val ${rt.tps ? tpsColorClass(rt.tps.oneMin) : ""}">${tpsVal}</span><span class="lbl">TPS (1m)</span></div>
+        <div class="stat"><span class="val">${rt.mspt ? rt.mspt.avg.toFixed(1) + "ms" : "—"}</span><span class="lbl">MSPT (avg)</span></div>
+      `;
+      body.appendChild(readout);
+      if (!rt.tps && !rt.mspt) {
+        const hint = document.createElement("div");
+        hint.className = "empty-hint";
+        hint.textContent = "Waiting for a /tps reply from console — sent automatically every 20s while this widget is on.";
+        body.appendChild(hint);
+      }
+      if (expanded) {
+        const chartWrap = document.createElement("div");
+        chartWrap.className = "chart-wrap";
+        const canvas = document.createElement("canvas");
+        canvas.className = "history";
+        const tooltip = document.createElement("div");
+        tooltip.className = "chart-tooltip";
+        chartWrap.appendChild(canvas);
+        chartWrap.appendChild(tooltip);
+        body.appendChild(chartWrap);
+        pendingCanvasDraws.push(() => drawTpsChart(canvas, tooltip, rt.tpsHistory));
+      }
+      return rt.tps ? `${rt.tps.oneMin.toFixed(1)} TPS` : "—";
+    });
+  }
+
+  function clockCard(rt) {
+    return makeCard("panel-clock", "In-game clock", (body) => {
+      const row = document.createElement("div");
+      row.className = "clock-row";
+      if (rt.gameTime) {
+        const isNight = rt.gameTime.ticks >= 13000 && rt.gameTime.ticks <= 23000;
+        const icon = document.createElement("span");
+        icon.className = "clock-icon";
+        icon.innerHTML = isNight ? MOON_SVG : SUN_SVG;
+        const text = document.createElement("div");
+        text.innerHTML = `<div class="clock-time">${escapeHtml(rt.gameTime.time12h)}</div><div class="clock-world">${escapeHtml(rt.gameTime.world)}</div>`;
+        row.appendChild(icon);
+        row.appendChild(text);
+      } else {
+        row.innerHTML = `<div class="empty-hint">Waiting for a /time reply from console…</div>`;
+      }
+      body.appendChild(row);
+      return rt.gameTime ? rt.gameTime.time12h : "";
+    });
+  }
+
+  function squaremapCard() {
+    return makeCard("panel-squaremap", "Live map (SquareMap)", (body) => {
+      if (!config.squaremapUrl) {
+        body.innerHTML = `<div class="empty-hint">Add your SquareMap URL in Settings to enable this.</div>`;
+        return "not set up";
+      }
+      const wrap = document.createElement("div");
+      wrap.className = "map-wrap";
+      const iframe = document.createElement("iframe");
+      iframe.src = config.squaremapUrl;
+      iframe.loading = "lazy";
+      wrap.appendChild(iframe);
+      const link = document.createElement("a");
+      link.href = config.squaremapUrl;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.className = "map-open-link";
+      link.textContent = "Open in new tab ↗";
+      wrap.appendChild(link);
+      body.appendChild(wrap);
+      return "";
+    });
+  }
+
   function playersCard(rt) {
     return makeCard("panel-players", "Players online", (body) => {
       const names = Array.from(rt.players.keys());
@@ -1269,16 +1554,28 @@
     tileCards.forEach((c) => grid.appendChild(c));
     if (tileCards.length) mainEl.appendChild(grid);
 
-    const chart = chartCard(rt, cpuLimit, memLimitBytes);
-    if (chart) mainEl.appendChild(chart);
-
-    const twoCol = document.createElement("div");
-    twoCol.className = "two-col";
-    [playersCard(rt), alertsCard(rt), planCard()].forEach((c) => { if (c) twoCol.appendChild(c); });
-    if (twoCol.children.length) mainEl.appendChild(twoCol);
-
-    const consoleC = consoleCard(identifier, consoleWasAtBottom);
-    if (consoleC) mainEl.appendChild(consoleC);
+    const split = document.createElement("div");
+    split.className = "split";
+    const colLeft = document.createElement("div");
+    colLeft.className = "col";
+    const colRight = document.createElement("div");
+    colRight.className = "col";
+    [
+      ["chart-history", chartCard(rt, cpuLimit, memLimitBytes)],
+      ["chart-tps", tpsCard(rt)],
+      ["panel-squaremap", squaremapCard()],
+      ["panel-console", consoleCard(identifier, consoleWasAtBottom)],
+      ["panel-players", playersCard(rt)],
+      ["panel-alerts", alertsCard(rt)],
+      ["panel-plan", planCard()],
+      ["panel-clock", clockCard(rt)]
+    ].forEach(([id, card]) => {
+      if (!card) return;
+      (WIDGET_COLUMN[id] === "right" ? colRight : colLeft).appendChild(card);
+    });
+    if (colLeft.children.length) split.appendChild(colLeft);
+    if (colRight.children.length) split.appendChild(colRight);
+    if (split.children.length) mainEl.appendChild(split);
 
     // Everything above is now attached to the live document, so canvases have real
     // layout dimensions — draw synchronously in this same pass rather than deferring
@@ -1409,6 +1706,80 @@
       tooltip.style.top = "0px";
       tooltip.style.display = "block";
       tooltip.innerHTML = `${fmtTime(s.t)}<br>CPU ${cpuPct(s).toFixed(1)}%<br>Mem ${memPct(s).toFixed(1)}% (${fmtBytes(s.mem)})`;
+    };
+    canvas.onmouseleave = () => { tooltip.style.display = "none"; };
+  }
+
+  function drawTpsChart(canvas, tooltip, tpsHistory) {
+    const dpr = window.devicePixelRatio || 1;
+    const w = canvas.clientWidth || 600, h = canvas.clientHeight || 160;
+    canvas.width = w * dpr; canvas.height = h * dpr;
+    const ctx = canvas.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    const pad = { l: 28, r: 8, t: 10, b: 18 };
+    const plotW = w - pad.l - pad.r, plotH = h - pad.t - pad.b;
+    const grid = getCssVar("--grid"), muted = getCssVar("--text-muted");
+    const color = getCssVar("--slot-1");
+
+    ctx.font = "10px system-ui, sans-serif";
+    ctx.fillStyle = muted;
+    ctx.strokeStyle = grid;
+    ctx.lineWidth = 1;
+    [0, 10, 20].forEach((v) => {
+      const y = pad.t + plotH - (v / 20) * plotH;
+      ctx.beginPath(); ctx.moveTo(pad.l, y + 0.5); ctx.lineTo(w - pad.r, y + 0.5); ctx.stroke();
+      ctx.fillText(String(v), 2, y + 3);
+    });
+
+    if (!tpsHistory.length) return;
+    const n = tpsHistory.length;
+    const stepX = n > 1 ? plotW / (n - 1) : 0;
+    const val = (s) => Math.max(0, Math.min(20, s.tps));
+
+    ctx.beginPath();
+    tpsHistory.forEach((s, i) => {
+      const x = pad.l + i * stepX, y = pad.t + plotH - (val(s) / 20) * plotH;
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.lineTo(pad.l + (n - 1) * stepX, pad.t + plotH);
+    ctx.lineTo(pad.l, pad.t + plotH);
+    ctx.closePath();
+    ctx.fillStyle = color + "1a";
+    ctx.fill();
+
+    ctx.beginPath();
+    tpsHistory.forEach((s, i) => {
+      const x = pad.l + i * stepX, y = pad.t + plotH - (val(s) / 20) * plotH;
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.lineJoin = "round"; ctx.lineCap = "round";
+    ctx.stroke();
+
+    const last = tpsHistory[n - 1];
+    const lx = pad.l + (n - 1) * stepX, ly = pad.t + plotH - (val(last) / 20) * plotH;
+    const surface = getCssVar("--surface-1") || "#fff";
+    ctx.beginPath(); ctx.arc(lx, ly, 4, 0, Math.PI * 2); ctx.fillStyle = color; ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = surface; ctx.stroke();
+    ctx.font = "11px system-ui, sans-serif";
+    ctx.fillStyle = color;
+    const label = last.tps.toFixed(1);
+    const tw = ctx.measureText(label).width;
+    ctx.fillText(label, Math.min(lx, w - pad.r - tw), Math.max(10, ly - 6));
+
+    canvas.onmousemove = canvas.ontouchmove = (ev) => {
+      const rect = canvas.getBoundingClientRect();
+      const clientX = ev.touches ? ev.touches[0].clientX : ev.clientX;
+      const x = clientX - rect.left;
+      let idx = Math.round((x - pad.l) / (stepX || 1));
+      idx = Math.max(0, Math.min(n - 1, idx));
+      const s = tpsHistory[idx];
+      if (!s) return;
+      const px = pad.l + idx * stepX;
+      tooltip.style.left = px + "px";
+      tooltip.style.top = "0px";
+      tooltip.style.display = "block";
+      tooltip.innerHTML = `${fmtTime(s.t)}<br>TPS ${s.tps.toFixed(1)}`;
     };
     canvas.onmouseleave = () => { tooltip.style.display = "none"; };
   }
